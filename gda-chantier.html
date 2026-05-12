@@ -1,0 +1,1005 @@
+﻿<!--
+  Fichier historique : l’interface est désormais servie par Laravel (Blade).
+  Connexion : GET /
+  Application chantier : GET /chantier
+  Styles : public/css/gda.css · Scripts : public/js/gda-app.js, public/js/gda-login.js
+  Vues Blade : resources/views/auth/login.blade.php · resources/views/chantier/
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GD&A — Gestion de Chantier</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== RESET & TOKENS ===== */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg:       #f4f1eb;
+  --bg2:      #ede9e0;
+  --surface:  #ffffff;
+  --border:   #d5cfc2;
+  --border2:  #c0b9aa;
+  --text:     #1a1814;
+  --muted:    #8a8070;
+  --accent:   #c8521a;
+  --accent2:  #1a5c8a;
+  --ok:       #1a7a42;
+  --warn:     #b87c10;
+  --danger:   #c01a1a;
+  --head-h:   56px;
+  --sidebar-w:260px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ===== HEADER ===== */
+.header {
+  position: fixed; top:0; left:0; right:0; z-index:200;
+  height: var(--head-h);
+  background: var(--text);
+  display: flex; align-items: center;
+  padding: 0 24px;
+  gap: 20px;
+}
+
+.logo {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 26px;
+  color: #fff; letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+.logo em { color: var(--accent); font-style: normal; }
+
+.header-sep { width:1px; height:28px; background:#fff2; flex-shrink:0; }
+
+.project-label {
+  color: #fff8;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  flex-shrink:0;
+}
+
+.header-spacer { flex: 1; }
+
+.user-pill {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff1;
+  border: 1px solid #fff2;
+  border-radius: 30px;
+  padding: 5px 14px 5px 5px;
+  cursor: pointer;
+}
+.user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.user-name { color: #fff; font-size: 13px; font-weight: 500; }
+
+/* Date live */
+.date-live {
+  color: #fff6;
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  position: fixed;
+  top: var(--head-h); left: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 100;
+  display: flex; flex-direction: column;
+}
+
+.sidebar-section {
+  padding: 20px 16px 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background .15s;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  border-left: 3px solid transparent;
+  user-select: none;
+}
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active {
+  background: var(--bg);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.nav-icon { font-size: 16px; width: 20px; text-align:center; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Overall progress in sidebar */
+.sidebar-progress {
+  padding: 16px;
+  background: var(--bg2);
+  border-radius: 8px;
+  margin: 0 16px 16px;
+}
+.sp-label { font-size: 10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.sp-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 44px; font-weight:800;
+  color: var(--accent); line-height:1;
+  margin-bottom: 6px;
+}
+.sp-bar { height: 6px; background: var(--border); border-radius:3px; overflow:hidden; }
+.sp-fill { height:100%; background: var(--accent); border-radius:3px; transition: width .6s; }
+
+/* ===== MAIN ===== */
+.main {
+  margin-left: var(--sidebar-w);
+  margin-top: var(--head-h);
+  padding: 28px;
+  min-height: calc(100vh - var(--head-h));
+}
+
+/* ===== PAGES ===== */
+.page { display:none; }
+.page.active { display:block; animation: fadeIn .2s ease; }
+@keyframes fadeIn { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+
+/* ===== PAGE TITLES ===== */
+.page-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.page-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 36px; font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+.page-sub {
+  font-size: 11px; letter-spacing:2px;
+  text-transform: uppercase; color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-head {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight:700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-head::before {
+  content:'';
+  display: inline-block;
+  width: 12px; height: 12px;
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+/* ===== STATS ROW ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::after {
+  content:'';
+  position: absolute; bottom:0; left:0; right:0;
+  height: 3px;
+}
+.stat-card.s-total::after { background: var(--accent2); }
+.stat-card.s-done::after  { background: var(--ok); }
+.stat-card.s-prog::after  { background: var(--accent); }
+.stat-card.s-late::after  { background: var(--danger); }
+
+.stat-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 40px; font-weight: 800; line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-card.s-total .stat-val { color: var(--accent2); }
+.stat-card.s-done  .stat-val { color: var(--ok); }
+.stat-card.s-prog  .stat-val { color: var(--accent); }
+.stat-card.s-late  .stat-val { color: var(--danger); }
+
+.stat-lbl { font-size: 10px; letter-spacing:2px; text-transform:uppercase; color: var(--muted); }
+
+/* ===== BUTTONS ===== */
+.btn {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight:700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 9px 18px;
+  border: none; border-radius: 6px;
+  cursor: pointer; transition: all .15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary   { background: var(--accent);  color: #fff; }
+.btn-primary:hover { background: #a8410e; }
+.btn-secondary { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); }
+.btn-secondary:hover { background: var(--border); }
+.btn-ok     { background: var(--ok);     color: #fff; }
+.btn-ok:hover { background: #145f32; }
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+.btn-icon { padding: 6px 10px; font-size: 14px; }
+
+/* ===== TABLES ===== */
+.tbl { width:100%; border-collapse:collapse; }
+.tbl th {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; letter-spacing:2px; text-transform:uppercase;
+  color: var(--muted);
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 10px;
+  border-bottom: 1px solid var(--bg2);
+  vertical-align: middle;
+  font-size: 13px;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--bg); }
+
+/* Progress bar in table */
+.pbar-wrap { display:flex; align-items:center; gap: 8px; }
+.pbar { flex:1; height:5px; background:var(--border); border-radius:3px; overflow:hidden; min-width: 60px; }
+.pbar-fill { height:100%; border-radius:3px; transition: width .4s; }
+.fill-0   { background: var(--border2); }
+.fill-low { background: var(--accent); }
+.fill-mid { background: var(--warn); }
+.fill-done{ background: var(--ok); }
+
+.pct-num { font-family:'Barlow Condensed',sans-serif; font-size:15px; font-weight:700; width:36px; text-align:right; }
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight:700; letter-spacing:1px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.badge-nd  { background:#e8e5df; color:var(--muted); }
+.badge-ip  { background:#fff3e0; color:var(--accent); border:1px solid #f5c080; }
+.badge-ok  { background:#e0f3e8; color:var(--ok);     border:1px solid #80c0a0; }
+.badge-late{ background:#fce8e8; color:var(--danger); border:1px solid #e08080; }
+.badge-blk { background:#e8eef5; color:var(--accent2);border:1px solid #80a8c8; }
+
+/* Phase header row */
+.phase-row td {
+  background: var(--bg2) !important;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 2px; text-transform:uppercase;
+  color: var(--text);
+  padding: 6px 10px;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.form-row.cols3 { grid-template-columns:1fr 1fr 1fr; }
+.form-row.col1  { grid-template-columns:1fr; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-label {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:10px; font-weight:700; letter-spacing:2px;
+  text-transform:uppercase; color:var(--muted);
+}
+input[type=text], input[type=number], input[type=date], input[type=email],
+input[type=password], select, textarea {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--surface); }
+
+/* Range input for progress */
+input[type=range] {
+  -webkit-appearance:none;
+  appearance:none;
+  width:100%; height:6px;
+  background: var(--border);
+  border-radius:3px;
+  cursor:pointer;
+  padding:0;
+  border:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:18px; height:18px;
+  border-radius:50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+
+/* ===== DAILY FORM ===== */
+.daily-task-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 120px 160px 1fr 80px;
+  gap: 10px;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: border-color .15s;
+}
+.daily-task-row:hover { border-color: var(--accent); }
+.daily-task-row .task-name {
+  font-weight: 600; font-size: 13px;
+}
+.daily-task-row .task-phase {
+  font-size: 10px; letter-spacing:1px;
+  text-transform:uppercase; color:var(--muted);
+  margin-top:2px;
+}
+.range-wrap { display:flex; flex-direction:column; gap:4px; }
+.range-val {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size: 18px; font-weight:700;
+  color: var(--accent); text-align:right;
+}
+
+/* ===== PHOTO GALLERY ===== */
+.photo-tabs {
+  display: flex; gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+}
+.photo-tab {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight:700; letter-spacing:1.5px;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  cursor: pointer;
+  color: var(--muted);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all .15s;
+}
+.photo-tab:hover { color: var(--text); }
+.photo-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.photo-tab-content { display:none; }
+.photo-tab-content.active { display:block; }
+
+.drop-zone {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  margin-bottom: 16px;
+}
+.drop-zone:hover, .drop-zone.drag-active {
+  border-color: var(--accent);
+  background: rgba(200,82,26,.04);
+}
+.dz-icon { font-size: 36px; opacity:.4; margin-bottom: 10px; }
+.dz-text { font-size:13px; color:var(--muted); line-height:1.6; }
+.dz-text strong { color:var(--accent); }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.photo-item {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.photo-item img {
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+  transition: transform .3s;
+}
+.photo-item:hover img { transform: scale(1.04); }
+.photo-item .photo-overlay {
+  position:absolute; inset:0;
+  background: linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%);
+  opacity:0; transition: opacity .2s;
+  display:flex; align-items:flex-end; padding:10px;
+}
+.photo-item:hover .photo-overlay { opacity:1; }
+.photo-overlay-btns { display:flex; gap:6px; }
+.photo-action-btn {
+  background:rgba(255,255,255,.9);
+  border:none; border-radius:4px;
+  padding:4px 8px; font-size:11px;
+  cursor:pointer; font-weight:600;
+}
+.photo-action-btn.del { color: var(--danger); }
+.photo-date-badge {
+  position:absolute; top:8px; right:8px;
+  background:rgba(0,0,0,.6);
+  color:#fff; font-size:10px;
+  padding:2px 7px; border-radius:10px;
+  font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:1px;
+}
+
+/* Lightbox */
+.lightbox {
+  display:none;
+  position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,.92);
+  align-items:center; justify-content:center;
+}
+.lightbox.open { display:flex; }
+.lightbox img { max-width:90vw; max-height:88vh; border-radius:4px; }
+.lb-close {
+  position:absolute; top:20px; right:24px;
+  color:#fff; font-size:32px; cursor:pointer;
+  line-height:1; background:none; border:none;
+}
+.lb-nav {
+  position:absolute;
+  top:50%; transform:translateY(-50%);
+  background:rgba(255,255,255,.15);
+  border:none; color:#fff;
+  font-size:28px; padding:12px 18px;
+  cursor:pointer; border-radius:4px;
+  transition: background .15s;
+}
+.lb-nav:hover { background:rgba(255,255,255,.3); }
+.lb-prev { left:20px; }
+.lb-next { right:20px; }
+
+/* ===== GANTT LIGHT ===== */
+.gantt-wrap { overflow-x:auto; }
+.gantt-grid {
+  display:grid;
+  min-width: 900px;
+}
+.gantt-row {
+  display:grid;
+  grid-template-columns: 220px 1fr;
+  border-bottom: 1px solid var(--bg2);
+  min-height: 32px;
+  align-items:center;
+}
+.gantt-row:hover { background:var(--bg); }
+.gantt-label {
+  padding: 5px 10px;
+  font-size: 11px; color:var(--muted);
+  white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis;
+}
+.gantt-track-wrap {
+  position:relative;
+  height:32px;
+  display:flex; align-items:center;
+}
+.gantt-bar {
+  position:absolute;
+  height:14px;
+  border-radius:3px;
+  background: var(--accent2);
+  opacity:.8;
+}
+.gantt-bar.done { background:var(--ok); }
+.gantt-bar.ip   { background:var(--accent); }
+.gantt-header {
+  display:grid;
+  grid-template-columns: 220px 1fr;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 4px;
+}
+.gantt-header .gantt-label {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* ===== MODAL ===== */
+.modal-backdrop {
+  display:none;
+  position:fixed; inset:0; z-index:500;
+  background:rgba(26,24,20,.7);
+  align-items:center; justify-content:center;
+}
+.modal-backdrop.open { display:flex; }
+.modal {
+  background:var(--surface);
+  border-radius:12px;
+  width:520px; max-width:95vw;
+  max-height:85vh; overflow-y:auto;
+  padding:28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+.modal-title {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:24px; font-weight:800;
+  margin-bottom:20px;
+}
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+
+/* ===== NOTIFICATION ===== */
+.toast {
+  position:fixed; bottom:24px; right:24px; z-index:9999;
+  background:var(--text);
+  color:#fff;
+  padding:12px 20px;
+  border-radius:8px;
+  font-size:13px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+  transform:translateY(80px); opacity:0;
+  transition: all .3s;
+  max-width:320px;
+  border-left: 4px solid var(--accent);
+}
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.ok   { border-left-color: var(--ok); }
+.toast.err  { border-left-color: var(--danger); }
+
+/* ===== LOGIN SCREEN ===== */
+#login-screen {
+  position:fixed; inset:0; z-index:9000;
+  background:var(--bg);
+  display:flex; align-items:center; justify-content:center;
+}
+.login-box {
+  width:420px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:40px;
+  box-shadow:0 16px 48px rgba(0,0,0,.1);
+}
+.login-logo {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:40px; font-weight:800;
+  color:var(--text); margin-bottom:4px;
+}
+.login-logo em { color:var(--accent); font-style:normal; }
+.login-sub { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:32px; }
+.login-sep { height:1px; background:var(--border); margin:24px 0; }
+
+/* ===== REPORT PREVIEW ===== */
+.report-preview {
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  font-family:Arial,sans-serif;
+}
+.rp-header {
+  display:grid; grid-template-columns:1fr auto;
+  border-bottom:3px solid #1a3a5c;
+  padding:14px 18px;
+  background:#fff;
+}
+.rp-title { font-size:13px; font-weight:bold; color:#1a3a5c; }
+.rp-report-title { font-size:18px; font-weight:bold; color:#c8521a; margin-top:4px; }
+.rp-meta { text-align:right; font-size:11px; }
+.rp-meta span { color:#c8521a; font-weight:bold; }
+
+.rp-table { width:100%; border-collapse:collapse; font-size:11px; }
+.rp-table th { background:#8b2c1c; color:#fff; padding:5px 7px; text-align:left; }
+.rp-table td { padding:5px 7px; border-bottom:0.5px solid #e0ddd5; }
+.rp-table tr:nth-child(even) td { background:#faf8f4; }
+.rp-phase-cell { font-weight:bold; color:#1a3a5c; font-size:10px; }
+.rp-mini-bar { display:inline-block; vertical-align:middle; width:50px; height:7px; background:#e0e0e0; border-radius:3px; overflow:hidden; margin-right:4px; }
+.rp-mini-fill { height:100%; border-radius:3px; }
+
+/* Responsive */
+@media(max-width:900px){
+  .sidebar { transform:translateX(-100%); }
+  .main { margin-left:0; }
+  .stats-row { grid-template-columns:1fr 1fr; }
+  .daily-task-row { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">GD<em>&</em>A</div>
+    <div class="login-sub">Gestion de chantier</div>
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Email</label>
+      <input type="email" id="login-email" autocomplete="username" placeholder="kone@gda.com" value="kone@gda.com">
+    </div>
+    <div class="form-group" style="margin-bottom:24px">
+      <label class="form-label">Mot de passe</label>
+      <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:16px;padding:13px" onclick="doLogin()">
+      Connexion →
+    </button>
+    <div class="login-sep"></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center">Projet : Station de lavage engins lourds<br>Construction en cours · Progression globale</div>
+  </div>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="logo">GD<em>&</em>A</div>
+  <div class="header-sep"></div>
+  <div class="project-label">Station de Lavage Engins</div>
+  <div class="header-spacer"></div>
+  <div class="date-live" id="date-live"></div>
+  <div style="width:12px"></div>
+  <div class="user-pill" onclick="doLogout()">
+    <div class="user-avatar" id="user-av">K</div>
+    <div class="user-name" id="user-nm">Koné A.</div>
+  </div>
+</header>
+
+<!-- ===== SIDEBAR ===== -->
+<nav class="sidebar">
+  <div class="sidebar-section">Navigation</div>
+  <div class="nav-item active" onclick="goTo('dashboard')"><span class="nav-icon">◈</span> Tableau de bord</div>
+  <div class="nav-item" onclick="goTo('daily')"><span class="nav-icon">✎</span> Saisie du jour</div>
+  <div class="nav-item" onclick="goTo('tasks')"><span class="nav-icon">≡</span> Toutes les tâches</div>
+  <div class="nav-item" onclick="goTo('photos')"><span class="nav-icon">◉</span> Galerie photos</div>
+  <div class="nav-item" onclick="goTo('report')"><span class="nav-icon">◻</span> Rapport PDF</div>
+
+  <div style="padding:16px 16px 0">
+    <div class="sidebar-progress">
+      <div class="sp-label">Progression globale</div>
+      <div class="sp-num" id="sb-progress">0%</div>
+      <div class="sp-bar"><div class="sp-fill" id="sb-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Rapport N°003</div>
+    <div style="font-size:11px;color:var(--muted)">Mise à jour: <span id="last-update">—</span></div>
+  </div>
+</nav>
+
+<!-- ===== LIGHTBOX ===== -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" onclick="closeLB()">✕</button>
+  <button class="lb-nav lb-prev" onclick="lbNav(-1)">‹</button>
+  <img id="lb-img" src="" alt="">
+  <button class="lb-nav lb-next" onclick="lbNav(1)">›</button>
+</div>
+
+<!-- ===== MODAL TÂCHE ===== -->
+<div class="modal-backdrop" id="modal-task">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Modifier la tâche</div>
+    <input type="hidden" id="modal-task-id">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Phase</label>
+        <input type="text" id="m-phase" readonly style="opacity:.6">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sous-phase</label>
+        <input type="text" id="m-sub" readonly style="opacity:.6">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Activité</label>
+      <input type="text" id="m-act" readonly style="opacity:.6">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Responsable</label>
+        <input type="text" id="m-resp">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Statut</label>
+        <select id="m-status">
+          <option value="non_demarre">Non démarré</option>
+          <option value="en_cours">En cours</option>
+          <option value="termine">Terminé</option>
+          <option value="bloque">Bloqué</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">Avancement — <span id="m-pct-lbl">0</span>%</label>
+      <input type="range" id="m-progress" min="0" max="100" step="5" value="0"
+        oninput="document.getElementById('m-pct-lbl').textContent=this.value">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Commentaire / Observations</label>
+      <textarea id="m-comment" rows="3" placeholder="Notes du jour..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-ok" data-requires-submit onclick="saveTask()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== MAIN ===== -->
+<main class="main">
+
+  <!-- ── DASHBOARD ── -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Tableau de bord</div>
+        <div class="page-sub">Vue d'ensemble du projet</div>
+      </div>
+      <button class="btn btn-primary" onclick="goTo('daily')">✎ Saisie du jour</button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card s-total">
+        <div class="stat-val" id="st-total">35</div>
+        <div class="stat-lbl">Tâches totales</div>
+      </div>
+      <div class="stat-card s-done">
+        <div class="stat-val" id="st-done">0</div>
+        <div class="stat-lbl">Terminées</div>
+      </div>
+      <div class="stat-card s-prog">
+        <div class="stat-val" id="st-prog">0</div>
+        <div class="stat-lbl">En cours</div>
+      </div>
+      <div class="stat-card s-late">
+        <div class="stat-val" id="st-late">0</div>
+        <div class="stat-lbl">Bloquées</div>
+      </div>
+    </div>
+
+    <!-- Phase progress -->
+    <div class="card">
+      <div class="card-head">Avancement par phase</div>
+      <div id="phase-progress-list"></div>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="card">
+      <div class="card-head">Activité récente</div>
+      <div id="recent-activity">
+        <div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">
+          Aucune activité enregistrée — commencez la saisie du jour.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DAILY INPUT ── -->
+  <div class="page" id="page-daily">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Saisie du jour</div>
+        <div class="page-sub" id="daily-date-label">Chargement...</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="margin-bottom:0;min-width:170px">
+          <label class="form-label">Date de saisie</label>
+          <input type="date" id="daily-date-input" onchange="changeDailyDate(this.value)">
+        </div>
+        <button class="btn btn-secondary" onclick="filterDaily('all')">Toutes</button>
+        <button class="btn btn-secondary" onclick="filterDaily('ip')">En cours</button>
+        <button class="btn btn-secondary" onclick="filterDaily('nd')">Non démarrées</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--muted)">
+          Mettez à jour l'avancement de vos tâches. Cliquez sur une ligne pour voir les détails.
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <div style="font-size:12px;color:var(--muted)">Filtre phase :</div>
+          <select id="daily-phase-filter" style="padding:5px 10px;font-size:12px" onchange="renderDaily()">
+            <option value="">— Toutes les phases —</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="daily-tasks-list"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+      <button class="btn btn-ok btn-sm" data-requires-submit data-daily-batch onclick="saveDailyAll()">✓ Enregistrer toutes les modifications</button>
+    </div>
+  </div>
+
+  <!-- ── ALL TASKS ── -->
+  <div class="page" id="page-tasks">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Toutes les tâches</div>
+        <div class="page-sub">35 activités · Groupées par phase</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <select id="task-filter-phase" style="padding:8px 12px;font-size:12px" onchange="renderAllTasks()">
+          <option value="">Toutes les phases</option>
+        </select>
+        <select id="task-filter-status" style="padding:8px 12px;font-size:12px" onchange="renderAllTasks()">
+          <option value="">Tous statuts</option>
+          <option value="non_demarre">Non démarré</option>
+          <option value="en_cours">En cours</option>
+          <option value="termine">Terminé</option>
+          <option value="bloque">Bloqué</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="tbl" id="all-tasks-table">
+        <thead>
+          <tr>
+            <th>Phase / Sous-phase</th>
+            <th>Activité</th>
+            <th>Responsable</th>
+            <th>Début</th>
+            <th>Durée</th>
+            <th style="min-width:160px">Avancement</th>
+            <th>Statut</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tasks-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── PHOTOS ── -->
+  <div class="page" id="page-photos">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Galerie photos</div>
+        <div class="page-sub">Documentation visuelle du chantier</div>
+      </div>
+    </div>
+
+    <div class="photo-tabs">
+      <div class="photo-tab active" onclick="switchPhotoTab('avant')">Avant travaux</div>
+      <div class="photo-tab" onclick="switchPhotoTab('pendant')">Pendant travaux</div>
+      <div class="photo-tab" onclick="switchPhotoTab('apres')">Après travaux</div>
+      <div class="photo-tab" onclick="switchPhotoTab('securite')">Sécurité</div>
+      <div class="photo-tab" onclick="switchPhotoTab('qualite')">Contrôle qualité</div>
+    </div>
+
+    <div id="photo-sections">
+      <!-- Generated dynamically -->
+    </div>
+  </div>
+
+  <!-- ── REPORT ── -->
+  <div class="page" id="page-report">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Rapport journalier</div>
+        <div class="page-sub">Génération et export PDF</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="previewReport()">👁 Aperçu</button>
+        <button class="btn btn-primary" onclick="printReport()">⬇ Imprimer / PDF</button>
+      </div>
+    </div>
+
+    <!-- Report config -->
+    <div class="card">
+      <div class="card-head">Paramètres du rapport</div>
+      <div class="form-row cols3">
+        <div class="form-group">
+          <label class="form-label">Date du rapport</label>
+          <input type="date" id="r-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Température (°C)</label>
+          <input type="number" id="r-temp" value="37" placeholder="37">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Météo</label>
+          <select id="r-weather">
+            <option>Sunny</option>
+            <option selected>Sunny/Windy</option>
+            <option>Cloudy</option>
+            <option>Rainy</option>
+            <option>Windy</option>
+            <option>Stormy</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nom du projet</label>
+          <input type="text" id="r-project" value="Construction Project of a Heavy Equipment Washing Station">
+        </div>
+        <div class="form-group">
+          <label class="form-label">N° de page</label>
+          <input type="text" id="r-page" value="1/1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview area -->
+    <div class="card">
+      <div class="card-head">Aperçu du rapport</div>
+      <div class="report-preview" id="report-preview-area">
+        <div style="padding:40px;text-align:center;color:var(--muted)">
+          Cliquez sur "Aperçu" pour générer le rapport.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script src="gda-app.js"></script>
+</body>
+</html>
