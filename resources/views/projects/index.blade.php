@@ -81,8 +81,10 @@
 @push('scripts')
 <script>
   window.GDA_API_BASE = @json(url('/api'));
+  window.GDA_APP_URL = @json(url('/'));
   window.GDA_LOGIN_URL = @json(route('login'));
-  window.GDA_AUTH_REQUIRED = false;
+  window.GDA_AUTH_REQUIRED = true;
+  window.GDA_IS_PARTNER = false;
 </script>
 <script src="{{ asset('js/gda-projects.js') }}"></script>
 @endpush

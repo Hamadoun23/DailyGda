@@ -1,5 +1,5 @@
 /**
- * Page de connexion GD&A — POST /api/login puis redirection /chantier
+ * Connexion GDA — POST /api/login (nom d'utilisateur + mot de passe) puis redirection.
  */
 const API_BASE = window.GDA_API_BASE || window.location.origin + '/api';
 const APP_URL = window.GDA_APP_URL || '/';
@@ -21,30 +21,30 @@ function toast(msg, type) {
 }
 
 async function doLogin() {
-  var emailEl = document.getElementById('login-email');
-  var passEl = document.getElementById('login-pass');
-  var email = emailEl && emailEl.value ? emailEl.value.trim() : '';
-  var password = passEl && passEl.value ? passEl.value : '';
+  const userEl = document.getElementById('login-username') || document.getElementById('login-email');
+  const passEl = document.getElementById('login-pass');
+  const username = userEl && userEl.value ? userEl.value.trim() : '';
+  const password = passEl && passEl.value ? passEl.value : '';
 
-  if (!email || !password) {
-    toast('Email et mot de passe requis.', 'err');
+  if (!username || !password) {
+    toast('Nom d\'utilisateur et mot de passe requis.', 'err');
     return;
   }
 
   try {
-    var res = await fetch(API_BASE + '/login', {
+    const res = await fetch(API_BASE + '/login', {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, password: password }),
+      body: JSON.stringify({ username: username, password: password }),
     });
-    var data = await res.json().catch(function () {
+    const data = await res.json().catch(function () {
       return {};
     });
 
     if (!res.ok) {
-      var msg =
+      const msg =
         data.message ||
-        (data.errors && data.errors.email && data.errors.email[0]) ||
+        (data.errors && data.errors.username && data.errors.username[0]) ||
         'Connexion impossible.';
       toast(msg, 'err');
       return;
@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.location.href = APP_URL;
   }
 
-  var pass = document.getElementById('login-pass');
+  const pass = document.getElementById('login-pass');
   if (pass) {
     pass.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') doLogin();

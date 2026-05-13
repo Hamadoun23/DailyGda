@@ -17,6 +17,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $project = Project::query()->firstOrFail();
-        $project->users()->sync(User::query()->pluck('id'));
+        $project->users()->sync(User::query()->pluck('id')->all());
     }
 }

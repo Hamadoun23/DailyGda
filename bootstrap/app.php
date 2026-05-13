@@ -12,8 +12,23 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
+        $middleware->redirectUsersTo(function () {
+            $user = auth()->user();
+            if (! $user) {
+                return '/';
+            }
+
+            return $user->isPartner()
+                ? route('partner.app', absolute: false)
+                : route('home', absolute: false);
+        });
+
         $middleware->alias([
-            'deny_direction' => \App\Http\Middleware\DenyDirectionRole::class,
+            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

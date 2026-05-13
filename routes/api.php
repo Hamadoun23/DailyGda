@@ -9,12 +9,12 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SubPhaseController;
 use App\Http\Controllers\Api\TaskController;
-use App\Http\Middleware\EnsureApiActor;
+use App\Http\Middleware\RestrictPartnerApi;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware([EnsureApiActor::class])->group(function (): void {
+Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (): void {
     Route::get('/whoami', [AuthController::class, 'whoami']);
     Route::post('/logout', [AuthController::class, 'logout']);
 

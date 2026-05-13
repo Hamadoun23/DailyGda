@@ -45,21 +45,8 @@
       <textarea id="m-comment" rows="3" placeholder="Notes du jour..."></textarea>
     </div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button type="button" class="btn btn-secondary" id="modal-task-dismiss" onclick="closeModal()">Annuler</button>
       <button type="button" class="btn btn-ok" data-requires-submit onclick="saveTask()">✓ Enregistrer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ===== MODAL LANGUE RAPPORT ===== -->
-<div class="modal-backdrop" id="modal-report-lang">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title" id="report-lang-modal-title">Langue du rapport</div>
-    <p id="report-lang-modal-hint" style="font-size:13px;color:var(--muted);margin:0 0 18px">Choisissez la langue d'affichage du rapport.</p>
-    <div class="modal-actions" style="justify-content:flex-end;gap:8px">
-      <button type="button" class="btn btn-secondary" onclick="closeReportLangModal()">Annuler</button>
-      <button type="button" class="btn btn-secondary" onclick="confirmReportLang('fr')">Français</button>
-      <button type="button" class="btn btn-primary" onclick="confirmReportLang('en')">English</button>
     </div>
   </div>
 </div>

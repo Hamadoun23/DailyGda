@@ -1,17 +1,42 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('chantier.index');
-})->name('home');
+Route::redirect('/chantier', '/', 302);
 
-Route::get('/login', function () {
-    return view('auth.login');
-})->name('login');
+Route::get('/', function () {
+    $user = auth()->user();
+    if (! $user) {
+        return redirect()->route('login');
+    }
+    if ($user->isPartner()) {
+        return redirect()->route('partner.app');
+    }
+
+    return view('chantier.index');
+})->middleware('auth')->name('home');
+
+Route::middleware(['auth'])->get('/partner', function () {
+    if (! auth()->user()->isPartner()) {
+        return redirect()->route('home');
+    }
+
+    return view('partner.index');
+})->name('partner.app');
 
 Route::get('/projets', function () {
     return view('projects.index');
-})->name('projects');
+})->middleware(['auth', 'admin'])->name('projects');
 
-Route::redirect('/chantier', '/', 302);
+Route::get('/dashboard', function () {
+    return redirect()->route('home');
+})->middleware(['auth'])->name('dashboard');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+require __DIR__.'/auth.php';

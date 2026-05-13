@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -10,39 +11,28 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        $users = [
-            [
-                'name' => 'Koné A.',
-                'email' => 'kone@gda.com',
-                'password' => Hash::make('1234'),
-                'role' => 'chef_chantier',
-                'avatar_initials' => 'K',
-            ],
-            [
-                'name' => 'Diallo M.',
-                'email' => 'diallo@gda.com',
-                'password' => Hash::make('1234'),
-                'role' => 'ingenieur',
-                'avatar_initials' => 'D',
-            ],
-            [
-                'name' => 'Bah S.',
-                'email' => 'bah@gda.com',
-                'password' => Hash::make('1234'),
-                'role' => 'controle_qualite',
-                'avatar_initials' => 'B',
-            ],
-            [
-                'name' => 'Direction GD&A',
-                'email' => 'direction@gda.com',
-                'password' => Hash::make('1234'),
-                'role' => 'direction',
-                'avatar_initials' => 'G',
-            ],
+        $accounts = [
+            ['username' => 'diallo', 'name' => 'Diallo', 'password' => 'Yaya@daily26', 'role' => User::ROLE_ADMIN, 'initials' => 'DI'],
+            ['username' => 'sacko', 'name' => 'Sacko', 'password' => 'Const@daily26', 'role' => User::ROLE_ADMIN, 'initials' => 'SA'],
+            ['username' => 'admingda', 'name' => 'Admingda', 'password' => 'Dymo@daily', 'role' => User::ROLE_ADMIN, 'initials' => 'DY'],
+            ['username' => 'b2gold', 'name' => 'B2gold', 'password' => 'Partner@26daily', 'role' => User::ROLE_PARTNER, 'initials' => 'B2'],
         ];
 
-        foreach ($users as $u) {
-            User::updateOrCreate(['email' => $u['email']], $u);
+        foreach ($accounts as $row) {
+            User::updateOrCreate(
+                ['username' => $row['username']],
+                [
+                    'name' => $row['name'],
+                    'password' => Hash::make($row['password']),
+                    'role' => $row['role'],
+                    'avatar_initials' => $row['initials'],
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        if ($project = Project::query()->first()) {
+            $project->users()->sync(User::query()->pluck('id')->all());
         }
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Validation\ValidationException;
 
@@ -14,22 +15,24 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'username' => ['required', 'string', 'max:64'],
             'password' => ['required', 'string'],
         ]);
 
+        $username = Str::lower(trim($credentials['username']));
+
         /** @var User|null $user */
-        $user = User::where('email', $credentials['email'])->first();
+        $user = User::query()->where('username', $username)->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Identifiants invalides.'],
+                'username' => ['Identifiants invalides.'],
             ]);
         }
 
         if (! $user->is_active) {
             throw ValidationException::withMessages([
-                'email' => ['Compte désactivé.'],
+                'username' => ['Compte désactivé.'],
             ]);
         }
 
@@ -44,8 +47,13 @@ class AuthController extends Controller
 
     public function whoami(Request $request)
     {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Non authentifié.'], 401);
+        }
+
         return response()->json([
-            'user' => $this->userPayload($request->user()),
+            'user' => $this->userPayload($user),
         ]);
     }
 
@@ -67,9 +75,11 @@ class AuthController extends Controller
     {
         return [
             'id' => $user->id,
+            'username' => $user->username,
             'name' => $user->name,
-            'email' => $user->email,
             'role' => $user->role,
+            'is_admin' => $user->isAdmin(),
+            'is_partner' => $user->isPartner(),
             'avatar_initials' => $user->avatar_initials,
             'current_progress' => $user->current_progress,
         ];

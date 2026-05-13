@@ -17,7 +17,7 @@ class ProjectController extends Controller
         $user = $request->user();
         $q = Project::query()->orderBy('id');
 
-        if ($user && ! $user->isDirection()) {
+        if ($user && ! $user->canViewAllProjects()) {
             $q->whereHas('users', fn ($rel) => $rel->whereKey($user->id));
         }
 

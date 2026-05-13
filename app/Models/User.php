@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -15,17 +16,22 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    public const ROLE_CHEF = 'chef_chantier';
+    protected static function booted(): void
+    {
+        static::saving(function (User $user): void {
+            if (is_string($user->username) && $user->username !== '') {
+                $user->username = Str::lower(trim($user->username));
+            }
+        });
+    }
 
-    public const ROLE_INGENIEUR = 'ingenieur';
+    public const ROLE_ADMIN = 'admin';
 
-    public const ROLE_CONTROLE = 'controle_qualite';
-
-    public const ROLE_DIRECTION = 'direction';
+    public const ROLE_PARTNER = 'partner';
 
     protected $fillable = [
+        'username',
         'name',
-        'email',
         'password',
         'role',
         'avatar_initials',
@@ -40,7 +46,6 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];
@@ -61,9 +66,22 @@ class User extends Authenticatable
         return $this->belongsToMany(Project::class)->withTimestamps();
     }
 
-    public function isDirection(): bool
+    public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_DIRECTION;
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isPartner(): bool
+    {
+        return $this->role === self::ROLE_PARTNER;
+    }
+
+    /**
+     * Voir tous les projets (sans filtre pivot) et accès gestion.
+     */
+    public function canViewAllProjects(): bool
+    {
+        return $this->isAdmin();
     }
 
     /**

@@ -697,9 +697,17 @@ input[type=range]::-webkit-slider-thumb {
   <div class="header-spacer"></div>
   <div class="date-live" id="date-live"></div>
   <div style="width:12px"></div>
-  <div class="user-pill" onclick="doLogout()">
-    <div class="user-avatar" id="user-av">K</div>
-    <div class="user-name" id="user-nm">Koné A.</div>
+  <div class="header-user-wrap">
+    <div class="user-pill" id="user-pill-btn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-controls="logout-popover" aria-label="Compte"
+      onclick="toggleLogoutPopover(event)"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLogoutPopover(event);}">
+      <div class="user-avatar" id="user-av">K</div>
+      <div class="user-name" id="user-nm">Koné A.</div>
+    </div>
+    <div id="logout-popover" class="logout-popover" role="menu" aria-hidden="true">
+      <button type="button" class="logout-popover__btn" role="menuitem" onclick="closeLogoutPopover()">Rester</button>
+      <button type="button" class="logout-popover__btn logout-popover__btn--out" role="menuitem" onclick="void performLogout()">Se déconnecter</button>
+    </div>
   </div>
 </header>
 

@@ -100,12 +100,12 @@ function deriveStatusFromProgress(p) {
   return 'non_demarre';
 }
 
-function isDirection() {
-  return currentUser && currentUser.role === 'direction';
+function isSiteReadOnly() {
+  return currentUser && currentUser.role === 'partner';
 }
 
 function applyUiRolePermissions() {
-  const dis = isDirection();
+  const dis = isSiteReadOnly();
   document.querySelectorAll('[data-requires-submit]').forEach(el => {
     el.style.display = dis ? 'none' : '';
   });
@@ -113,21 +113,49 @@ function applyUiRolePermissions() {
   if (batchBtn) batchBtn.disabled = dis;
 }
 
+function readXsrfFromCookie() {
+  const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function readMetaCsrf() {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+/** Laravel : X-XSRF-TOKEN = valeur du cookie XSRF-TOKEN (chiffrée) ; sinon X-CSRF-TOKEN = meta (clair). */
+function applyCsrfHeaders(headers) {
+  const fromCookie = readXsrfFromCookie();
+  const fromMeta = readMetaCsrf();
+  if (fromCookie) {
+    headers['X-XSRF-TOKEN'] = fromCookie;
+  } else if (fromMeta) {
+    headers['X-CSRF-TOKEN'] = fromMeta;
+  }
+}
+
 async function apiFetch(path, options = {}) {
   const headers = {
     Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
     ...(options.body !== undefined && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers || {}),
   };
+  applyCsrfHeaders(headers);
+
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.Authorization = 'Bearer ' + token;
 
   const projectId = localStorage.getItem(PROJECT_STORAGE_KEY);
   if (projectId) headers['X-Project-Id'] = projectId;
 
-  const res = await fetch(API_BASE + path, { ...options, headers });
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
   if (res.status === 401) {
     clearAuth();
+    if (window.GDA_AUTH_REQUIRED) showLogin();
     throw new Error('Non autorisé');
   }
   if (!res.ok) {
@@ -154,10 +182,65 @@ function showLogin() {
 
 function hideLogin() {}
 
-async function doLogout() {
-  if (!confirm('Se déconnecter ?')) return;
+function logoutOutsideClick(e) {
+  const wrap = document.querySelector('.header-user-wrap');
+  if (wrap && wrap.contains(e.target)) return;
+  closeLogoutPopover();
+}
+
+function logoutEscape(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeLogoutPopover();
+  }
+}
+
+function toggleLogoutPopover(ev) {
+  ev.stopPropagation();
+  const pop = document.getElementById('logout-popover');
+  const btn = document.getElementById('user-pill-btn');
+  if (!pop || !btn) return;
+  const open = pop.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  pop.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (open) {
+    queueMicrotask(() => {
+      document.addEventListener('click', logoutOutsideClick, true);
+      document.addEventListener('keydown', logoutEscape, true);
+    });
+  } else {
+    document.removeEventListener('click', logoutOutsideClick, true);
+    document.removeEventListener('keydown', logoutEscape, true);
+  }
+}
+
+function closeLogoutPopover() {
+  const pop = document.getElementById('logout-popover');
+  const btn = document.getElementById('user-pill-btn');
+  pop?.classList.remove('is-open');
+  pop?.setAttribute('aria-hidden', 'true');
+  btn?.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('click', logoutOutsideClick, true);
+  document.removeEventListener('keydown', logoutEscape, true);
+}
+
+async function performLogout() {
+  closeLogoutPopover();
+  const csrf = readMetaCsrf();
+  const base = (window.GDA_APP_URL || window.location.origin + '/').replace(/\/?$/, '/');
   try {
-    await apiFetch('/logout', { method: 'POST', body: '{}' });
+    const hdr = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'text/html,application/json',
+    };
+    applyCsrfHeaders(hdr);
+    await fetch(base + 'logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: hdr,
+      body: new URLSearchParams({ _token: csrf || '' }),
+    });
   } catch (_) {}
   clearAuth();
   currentUser = null;
@@ -238,8 +321,11 @@ async function switchProject(projectId) {
   applyUiRolePermissions();
 
   const preview = document.getElementById('report-preview-area');
-  if (preview) {
-    preview.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cliquez sur "Aperçu" pour générer le rapport.</div>';
+  const reportPage = document.getElementById('page-report');
+  if (preview && reportPage?.classList.contains('active')) {
+    void previewReport();
+  } else if (preview) {
+    preview.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Chargement de l’aperçu…</div>';
   }
 
   const project = cachedProjects.find(item => String(item.id) === String(projectId));
@@ -309,22 +395,32 @@ async function initApp() {
   await loadProject();
   await loadTasks();
   await refreshDashboard();
-  await loadDaily();
-  pendingDaily = {};
+  if (!window.GDA_IS_PARTNER) {
+    await loadDaily();
+    pendingDaily = {};
+  } else {
+    pendingDaily = {};
+  }
 
   populatePhaseFilters();
   applyTasksSubtitleCount();
   refreshSidebar();
   renderDashboard();
-  renderDaily();
+  if (!window.GDA_IS_PARTNER) {
+    renderDaily();
+  }
   renderAllTasks();
-  await loadPhotosCategory(currentPhotoTab);
-  renderPhotos();
+  if (!window.GDA_IS_PARTNER) {
+    await loadPhotosCategory(currentPhotoTab);
+    renderPhotos();
+  }
   applyUiRolePermissions();
 }
 
 function updateClock() {
-  document.getElementById('date-live').textContent =
+  const el = document.getElementById('date-live');
+  if (!el) return;
+  el.textContent =
     new Date().toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -393,6 +489,10 @@ function refreshSidebar() {
 }
 
 function goTo(page) {
+  if (window.GDA_IS_PARTNER && (page === 'daily' || page === 'photos')) {
+    toast('Cette section n’est pas accessible pour votre profil.', 'err');
+    return;
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -406,6 +506,10 @@ function goTo(page) {
   if (page === 'tasks') renderAllTasks();
   if (page === 'photos') {
     loadPhotosCategory(currentPhotoTab).then(() => renderPhotos());
+  }
+  if (page === 'report') {
+    syncReportLangToggle();
+    void previewReport();
   }
 }
 
@@ -511,7 +615,7 @@ function renderDaily() {
         <input type="range" min="0" max="100" step="1" value="${prog}"
           data-id="${t.id}"
           oninput="quickUpdate(${t.id},this.value)"
-          style="width:100%" ${isDirection() ? 'disabled' : ''}>
+          style="width:100%" ${isSiteReadOnly() ? 'disabled' : ''}>
         <div class="range-val" id="rv-${t.id}">${prog}%</div>
       </div>
       <div>
@@ -525,7 +629,7 @@ function renderDaily() {
 }
 
 function quickUpdate(id, val) {
-  if (isDirection()) return;
+  if (isSiteReadOnly()) return;
   const v = parseInt(val, 10);
   pendingDaily[id] = { ...pendingDaily[id], progress: v, status: deriveStatusFromProgress(v) };
   document.getElementById('rv-' + id).textContent = v + '%';
@@ -537,7 +641,7 @@ function quickUpdate(id, val) {
 }
 
 async function saveDailyAll() {
-  if (isDirection()) return;
+  if (isSiteReadOnly()) return;
   const keys = Object.keys(pendingDaily);
   if (!keys.length) {
     toast('Aucune modification à enregistrer', '');
@@ -587,7 +691,7 @@ function closeModal() {
 }
 
 async function saveTask() {
-  if (isDirection()) return;
+  if (isSiteReadOnly()) return;
   const id = parseInt(document.getElementById('modal-task-id').value, 10);
   const t = tasks.find(x => x.id === id);
   if (!t) return;
@@ -740,11 +844,11 @@ function renderPhotos() {
 
   const dz = document.getElementById('dz-' + currentPhotoTab);
   if (dz) {
-    dz.onclick = () => { if (!isDirection()) document.getElementById('ph-input-' + currentPhotoTab).click(); };
-    dz.style.opacity = isDirection() ? '0.55' : '';
-    dz.style.pointerEvents = isDirection() ? 'none' : '';
+    dz.onclick = () => { if (!isSiteReadOnly()) document.getElementById('ph-input-' + currentPhotoTab).click(); };
+    dz.style.opacity = isSiteReadOnly() ? '0.55' : '';
+    dz.style.pointerEvents = isSiteReadOnly() ? 'none' : '';
   }
-  if (dz && !isDirection()) {
+  if (dz && !isSiteReadOnly()) {
     dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-active'); });
     dz.addEventListener('dragleave', () => dz.classList.remove('drag-active'));
     dz.addEventListener('drop', e => {
@@ -785,7 +889,7 @@ function emptyPhotos() {
 }
 
 async function addPhotos(tab, files) {
-  if (isDirection()) return;
+  if (isSiteReadOnly()) return;
   for (const file of Array.from(files)) {
     if (!file.type.startsWith('image/')) continue;
     const fd = new FormData();
@@ -803,7 +907,7 @@ async function addPhotos(tab, files) {
 }
 
 async function removePhoto(tab, i) {
-  if (isDirection()) return;
+  if (isSiteReadOnly()) return;
   if (!confirm('Supprimer cette photo ?')) return;
   const p = photoStore[tab][i];
   if (!p || !p.id) return;
@@ -888,7 +992,23 @@ const STATUS_LABELS_EN = {
 };
 
 let reportPreviewLang = 'fr';
-let reportLangAction = 'preview';
+
+function syncReportLangToggle() {
+  const fr = document.getElementById('report-lang-fr');
+  const en = document.getElementById('report-lang-en');
+  if (!fr || !en) return;
+  const isFr = reportPreviewLang !== 'en';
+  fr.classList.toggle('btn-primary', isFr);
+  fr.classList.toggle('btn-secondary', !isFr);
+  en.classList.toggle('btn-primary', !isFr);
+  en.classList.toggle('btn-secondary', isFr);
+}
+
+function setReportLang(lang) {
+  reportPreviewLang = lang === 'en' ? 'en' : 'fr';
+  syncReportLangToggle();
+  void previewReport();
+}
 
 function reportCopy(lang = reportPreviewLang) {
   return REPORT_COPY[lang] || REPORT_COPY.fr;
@@ -943,56 +1063,31 @@ function reportStatusLabel(task, lang = reportPreviewLang) {
   return task.status_label;
 }
 
-function openReportLangModal(action = 'preview') {
-  reportLangAction = action === 'pdf' ? 'pdf' : 'preview';
-  const title = document.getElementById('report-lang-modal-title');
-  const hint = document.getElementById('report-lang-modal-hint');
-  if (title) {
-    title.textContent = reportLangAction === 'pdf'
-      ? 'Langue du rapport PDF'
-      : 'Langue de l\'aperçu';
-  }
-  if (hint) {
-    hint.textContent = reportLangAction === 'pdf'
-      ? 'Choisissez la langue du document à générer.'
-      : 'Choisissez la langue d\'affichage du rapport.';
-  }
-  document.getElementById('modal-report-lang')?.classList.add('open');
-}
-
-function closeReportLangModal() {
-  document.getElementById('modal-report-lang')?.classList.remove('open');
-}
-
-function confirmReportLang(lang) {
-  reportPreviewLang = lang === 'en' ? 'en' : 'fr';
-  closeReportLangModal();
-  if (reportLangAction === 'pdf') printReport();
-  else previewReport();
-}
-
 async function previewReport() {
   await loadAllPhotoCategories();
-  document.getElementById('report-preview-area').innerHTML = buildReportHTML(false, reportPreviewLang);
+  const area = document.getElementById('report-preview-area');
+  if (area) area.innerHTML = buildReportHTML(false, reportPreviewLang);
 }
 
 async function downloadReportPdf(reportId, locale = reportPreviewLang) {
-  const token = localStorage.getItem(TOKEN_KEY);
   const projectId = localStorage.getItem(PROJECT_STORAGE_KEY);
-  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/pdf' };
+  const headers = {
+    Accept: 'application/pdf',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  applyCsrfHeaders(headers);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) headers.Authorization = 'Bearer ' + token;
   if (projectId) headers['X-Project-Id'] = projectId;
   const res = await fetch(API_BASE + '/reports/' + reportId + '/pdf?locale=' + encodeURIComponent(locale), {
     headers,
+    credentials: 'include',
   });
   if (!res.ok) throw new Error('PDF indisponible');
   return res.blob();
 }
 
 async function printReport() {
-  if (isDirection()) {
-    toast('Génération réservée aux rôles opérationnels', 'err');
-    return;
-  }
   const date = document.getElementById('r-date').value;
   const temp = document.getElementById('r-temp').value;
   const weather = document.getElementById('r-weather').value;
@@ -1145,38 +1240,69 @@ function toast(msg, type = '') {
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-document.getElementById('modal-report-lang')?.addEventListener('click', function (e) {
-  if (e.target === this) closeReportLangModal();
-});
+function applyPartnerShellHides() {
+  if (!window.GDA_IS_PARTNER) return;
+  document.querySelectorAll('[data-hide-for-partner]').forEach((el) => {
+    el.style.display = 'none';
+  });
+  const dismiss = document.getElementById('modal-task-dismiss');
+  if (dismiss) dismiss.textContent = 'Retour';
+}
+
+function bindReportPreviewAutoRefresh() {
+  let t;
+  const schedule = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (document.getElementById('page-report')?.classList.contains('active')) {
+        void previewReport();
+      }
+    }, 380);
+  };
+  ['r-date', 'r-temp', 'r-weather', 'r-project'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', schedule);
+    el.addEventListener('input', schedule);
+  });
+}
 
 document.getElementById('modal-task')?.addEventListener('click', function (e) {
   if (e.target === this) closeModal();
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const raw = localStorage.getItem(USER_KEY);
-  if (raw) {
-    try {
-      currentUser = JSON.parse(raw);
-      document.getElementById('user-av').textContent = currentUser.avatar_initials || currentUser.name.charAt(0);
-      document.getElementById('user-nm').textContent = currentUser.name;
-    } catch (_) {}
-  } else {
-    try {
-      const { user } = await apiFetch('/whoami');
-      currentUser = user;
-      document.getElementById('user-av').textContent = user.avatar_initials || user.name.charAt(0);
-      document.getElementById('user-nm').textContent = user.name;
-    } catch (_) {
-      currentUser = null;
-      document.getElementById('user-nm').textContent = 'Invité';
+  const authRequired = !!window.GDA_AUTH_REQUIRED;
+  try {
+    const { user } = await apiFetch('/whoami');
+    currentUser = user;
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    const av = document.getElementById('user-av');
+    const nm = document.getElementById('user-nm');
+    if (av) av.textContent = user.avatar_initials || user.name.charAt(0);
+    if (nm) nm.textContent = user.name;
+  } catch (_) {
+    currentUser = null;
+    if (authRequired) {
+      showLogin();
+      return;
     }
+    const nm = document.getElementById('user-nm');
+    if (nm) nm.textContent = 'Invité';
   }
+
+  applyPartnerShellHides();
 
   try {
     bindSidebarProjectSelect();
-    await loadProjectCatalog();
+    if (window.GDA_IS_PARTNER) {
+      await loadProject();
+    } else {
+      await loadProjectCatalog();
+    }
     await initApp();
+    syncReportLangToggle();
+    bindReportPreviewAutoRefresh();
   } catch (e) {
     toast(e.message || 'Impossible de charger le chantier.', 'err');
   }

@@ -6,13 +6,13 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class DenyDirectionRole
+class EnsureUserIsAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if ($user && $user->isDirection()) {
-            return response()->json(['message' => 'Ce rôle ne peut pas effectuer cette action.'], 403);
+        if (! $user || ! $user->isAdmin()) {
+            abort(403, 'Réservé aux administrateurs.');
         }
 
         return $next($request);

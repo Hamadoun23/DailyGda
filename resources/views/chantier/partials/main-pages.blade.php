@@ -5,7 +5,7 @@
         <div class="page-title">Tableau de bord</div>
         <div class="page-sub">Vue d'ensemble du projet</div>
       </div>
-      <button type="button" class="btn btn-primary" onclick="goTo('daily')">✎ Saisie du jour</button>
+        <button type="button" class="btn btn-primary" onclick="goTo('daily')" data-hide-for-partner>✎ Saisie du jour</button>
     </div>
 
     <div class="stats-row">
@@ -151,14 +151,18 @@
         <div class="page-title">Rapport journalier</div>
         <div class="page-sub">Génération et export PDF</div>
       </div>
-      <div style="display:flex;gap:8px">
-        <button type="button" class="btn btn-secondary" onclick="openReportLangModal('preview')">👁 Aperçu</button>
-        <button type="button" class="btn btn-primary" onclick="openReportLangModal('pdf')">⬇ Imprimer / PDF</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted);margin-right:4px">Langue</span>
+        <div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid var(--border)" role="group" aria-label="Langue du rapport">
+          <button type="button" class="btn btn-sm" id="report-lang-fr" onclick="setReportLang('fr')" style="border-radius:0;border:0">FR</button>
+          <button type="button" class="btn btn-sm" id="report-lang-en" onclick="setReportLang('en')" style="border-radius:0;border:0;border-left:1px solid var(--border)">EN</button>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="printReport()">⬇ Imprimer / PDF</button>
       </div>
     </div>
 
-    <!-- Report config -->
-    <div class="card">
+    <!-- Report config (admin / chantier uniquement) -->
+    <div class="card" data-hide-for-partner>
       <div class="card-head">Paramètres du rapport</div>
       <div class="form-row cols3">
         <div class="form-group">
@@ -194,7 +198,7 @@
       <div class="card-head">Aperçu du rapport</div>
       <div class="report-preview" id="report-preview-area">
         <div style="padding:40px;text-align:center;color:var(--muted)">
-          Cliquez sur "Aperçu" pour générer le rapport.
+          Chargement de l’aperçu…
         </div>
       </div>
     </div>

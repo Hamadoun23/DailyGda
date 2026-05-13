@@ -18,7 +18,7 @@ trait ResolvesProject
             $project = Project::query()->orderBy('id')->firstOrFail();
         }
 
-        if ($user && ! $user->isDirection() && ! $user->projects()->whereKey($project->id)->exists()) {
+        if ($user && ! $user->canViewAllProjects() && ! $user->projects()->whereKey($project->id)->exists()) {
             abort(403, 'Accès non autorisé à ce projet.');
         }
 
@@ -32,7 +32,7 @@ trait ResolvesProject
             abort(401);
         }
 
-        if ($user->isDirection()) {
+        if ($user->canViewAllProjects()) {
             return;
         }
 

@@ -6,6 +6,26 @@ const TOKEN_KEY = 'gda_token';
 const USER_KEY = 'gda_user';
 const PROJECT_STORAGE_KEY = 'gda_project_id';
 
+function readXsrfFromCookie() {
+  const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function readMetaCsrf() {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+/** Laravel : X-XSRF-TOKEN = cookie XSRF-TOKEN ; sinon X-CSRF-TOKEN = meta. */
+function applyCsrfHeaders(headers) {
+  const fromCookie = readXsrfFromCookie();
+  const fromMeta = readMetaCsrf();
+  if (fromCookie) {
+    headers['X-XSRF-TOKEN'] = fromCookie;
+  } else if (fromMeta) {
+    headers['X-CSRF-TOKEN'] = fromMeta;
+  }
+}
+
 let cachedProjects = [];
 let structureProjectId = null;
 let structureProjectName = '';
@@ -30,11 +50,14 @@ async function apiFetch(path, options = {}) {
 
   const headers = {
     Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
     ...(opts.body !== undefined && !(opts.body instanceof FormData)
       ? { 'Content-Type': 'application/json' }
       : {}),
     ...(opts.headers || {}),
   };
+  applyCsrfHeaders(headers);
+
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.Authorization = 'Bearer ' + token;
 
@@ -44,9 +67,10 @@ async function apiFetch(path, options = {}) {
       : localStorage.getItem(PROJECT_STORAGE_KEY);
   if (pid) headers['X-Project-Id'] = pid;
 
-  const res = await fetch(API_BASE + path, { ...opts, headers });
+  const res = await fetch(API_BASE + path, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
     clearAuth();
+    if (window.GDA_AUTH_REQUIRED) showLogin();
     throw new Error('Non autorisé');
   }
   if (!res.ok) {
@@ -71,10 +95,65 @@ function toast(msg, type = '') {
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-async function doLogout() {
-  if (!confirm('Se déconnecter ?')) return;
+function logoutOutsideClick(e) {
+  const wrap = document.querySelector('.header-user-wrap');
+  if (wrap && wrap.contains(e.target)) return;
+  closeLogoutPopover();
+}
+
+function logoutEscape(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeLogoutPopover();
+  }
+}
+
+function toggleLogoutPopover(ev) {
+  ev.stopPropagation();
+  const pop = document.getElementById('logout-popover');
+  const btn = document.getElementById('user-pill-btn');
+  if (!pop || !btn) return;
+  const open = pop.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  pop.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (open) {
+    queueMicrotask(() => {
+      document.addEventListener('click', logoutOutsideClick, true);
+      document.addEventListener('keydown', logoutEscape, true);
+    });
+  } else {
+    document.removeEventListener('click', logoutOutsideClick, true);
+    document.removeEventListener('keydown', logoutEscape, true);
+  }
+}
+
+function closeLogoutPopover() {
+  const pop = document.getElementById('logout-popover');
+  const btn = document.getElementById('user-pill-btn');
+  pop?.classList.remove('is-open');
+  pop?.setAttribute('aria-hidden', 'true');
+  btn?.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('click', logoutOutsideClick, true);
+  document.removeEventListener('keydown', logoutEscape, true);
+}
+
+async function performLogout() {
+  closeLogoutPopover();
+  const csrf = readMetaCsrf();
+  const base = (window.GDA_APP_URL || window.location.origin + '/').replace(/\/?$/, '/');
   try {
-    await apiFetch('/logout', { method: 'POST', body: '{}' });
+    const hdr = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'text/html,application/json',
+    };
+    applyCsrfHeaders(hdr);
+    await fetch(base + 'logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: hdr,
+      body: new URLSearchParams({ _token: csrf || '' }),
+    });
   } catch (_) {}
   clearAuth();
   window.location.href = window.GDA_LOGIN_URL || '/login';
@@ -640,26 +719,21 @@ function closeStructurePanel() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const raw = localStorage.getItem(USER_KEY);
-  if (raw) {
-    try {
-      const u = JSON.parse(raw);
-      const av = document.getElementById('user-av');
-      const nm = document.getElementById('user-nm');
-      if (av) av.textContent = u.avatar_initials || u.name.charAt(0);
-      if (nm) nm.textContent = u.name;
-    } catch (_) {}
-  } else {
-    try {
-      const { user } = await apiFetch('/whoami');
-      const av = document.getElementById('user-av');
-      const nm = document.getElementById('user-nm');
-      if (av) av.textContent = user.avatar_initials || user.name.charAt(0);
-      if (nm) nm.textContent = user.name;
-    } catch (_) {
-      const nm = document.getElementById('user-nm');
-      if (nm) nm.textContent = 'Invité';
+  const authRequired = !!window.GDA_AUTH_REQUIRED;
+  try {
+    const { user } = await apiFetch('/whoami');
+    const av = document.getElementById('user-av');
+    const nm = document.getElementById('user-nm');
+    if (av) av.textContent = user.avatar_initials || user.name.charAt(0);
+    if (nm) nm.textContent = user.name;
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch (_) {
+    if (authRequired) {
+      showLogin();
+      return;
     }
+    const nm = document.getElementById('user-nm');
+    if (nm) nm.textContent = 'Invité';
   }
 
   const tbody = document.getElementById('projects-tbody');
