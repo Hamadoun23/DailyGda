@@ -19,4 +19,19 @@ final class GdaStatus
     {
         return self::LABELS_FR[$status] ?? $status;
     }
+
+    public static function label(string $status, string $locale = 'fr'): string
+    {
+        if ($locale === 'en') {
+            return match ($status) {
+                'non_demarre' => 'Not started',
+                'en_cours' => 'In progress',
+                'termine' => 'Completed',
+                'annule' => 'Cancelled',
+                default => $status,
+            };
+        }
+
+        return self::labelFr($status);
+    }
 }

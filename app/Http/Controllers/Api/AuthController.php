@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -25,6 +26,8 @@ class AuthController extends Controller
         $user = User::query()->where('username', $username)->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            ActivityLogger::loginFailed($request, $username);
+
             throw ValidationException::withMessages([
                 'username' => ['Identifiants invalides.'],
             ]);
@@ -38,6 +41,8 @@ class AuthController extends Controller
 
         $user->tokens()->delete();
         $token = $user->createToken('gda-api')->plainTextToken;
+
+        ActivityLogger::login($user, $request, viaApi: true);
 
         return response()->json([
             'user' => $this->userPayload($user),
@@ -59,6 +64,10 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        if ($user = $request->user()) {
+            ActivityLogger::logout($user, $request, viaApi: true);
+        }
+
         $token = $request->bearerToken();
         if ($token) {
             $pat = PersonalAccessToken::findToken($token);

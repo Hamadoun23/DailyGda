@@ -6,7 +6,9 @@ use App\Http\Controllers\Concerns\ResolvesProject;
 use App\Http\Controllers\Controller;
 use App\Models\SubPhase;
 use App\Models\Task;
+use App\Support\GdaLocale;
 use App\Support\GdaStatus;
+use App\Support\ReportPresentation;
 use Illuminate\Http\Request;
 
 class TaskController extends Controller
@@ -16,6 +18,7 @@ class TaskController extends Controller
     public function index(Request $request)
     {
         $project = $this->resolveProject($request);
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
 
         $query = Task::query()
             ->forProject($project->id)
@@ -50,7 +53,7 @@ class TaskController extends Controller
             ->values();
 
         return response()->json([
-            'tasks' => $tasks->map(fn (Task $t) => $this->serializeTask($t)),
+            'tasks' => $tasks->map(fn (Task $t) => $this->serializeTask($t, $presentation)),
         ]);
     }
 
@@ -79,8 +82,10 @@ class TaskController extends Controller
             'sort_order' => $data['sort_order'] ?? $next,
         ]);
 
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
+
         return response()->json([
-            'task' => $this->serializeTask($task->load(['subPhase.phase', 'latestDailyUpdate'])),
+            'task' => $this->serializeTask($task->load(['subPhase.phase', 'latestDailyUpdate']), $presentation),
         ], 201);
     }
 
@@ -92,23 +97,28 @@ class TaskController extends Controller
         $task->load([
             'subPhase.phase',
             'latestDailyUpdate',
+            'progressNotes' => fn ($q) => $q->with('user')->limit(100),
             'dailyUpdates' => fn ($q) => $q->orderByDesc('report_date')->orderByDesc('id')->with('user'),
         ]);
+
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
+        $loc = $presentation->locale();
 
         $history = $task->dailyUpdates->map(fn ($u) => [
             'id' => $u->id,
             'report_date' => $u->report_date->toDateString(),
             'progress' => $u->progress,
             'status' => $u->status,
-            'status_label' => GdaStatus::labelFr($u->status),
+            'status_label' => GdaStatus::label($u->status, $loc),
             'comment' => $u->comment,
             'user_name' => $u->user?->name,
             'updated_at' => $u->updated_at->toIso8601String(),
         ]);
 
         return response()->json([
-            'task' => $this->serializeTask($task),
+            'task' => $this->serializeTask($task, $presentation),
             'daily_updates' => $history,
+            'progress_notes' => $this->serializeProgressNotes($task, $presentation),
         ]);
     }
 
@@ -124,9 +134,10 @@ class TaskController extends Controller
         ]);
 
         $task->update($data);
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
 
         return response()->json([
-            'task' => $this->serializeTask($task->fresh(['subPhase.phase', 'latestDailyUpdate'])),
+            'task' => $this->serializeTask($task->fresh(['subPhase.phase', 'latestDailyUpdate']), $presentation),
         ]);
     }
 
@@ -142,25 +153,52 @@ class TaskController extends Controller
     /**
      * @return array<string, mixed>
      */
-    protected function serializeTask(Task $task): array
+    protected function serializeTask(Task $task, ReportPresentation $presentation): array
     {
         $task->loadMissing('subPhase.phase');
         $latest = $task->latestDailyUpdate;
         $status = $latest?->status ?? 'non_demarre';
+        $loc = $presentation->locale();
 
         return [
             'id' => $task->id,
             'phase_id' => $task->subPhase->phase_id,
             'sub_phase_id' => $task->sub_phase_id,
-            'phase' => $task->subPhase->phase->name,
-            'subphase' => $task->subPhase->name,
-            'activity' => $task->activity,
+            'phase' => $presentation->translate($task->subPhase->phase->name, 'phases'),
+            'subphase' => $presentation->translate($task->subPhase->name, 'subphases'),
+            'activity' => $presentation->translate($task->activity, 'activities'),
             'start_day' => $task->start_day,
             'duration_days' => $task->duration_days,
             'progress' => $latest?->progress ?? 0,
             'status' => $status,
-            'status_label' => GdaStatus::labelFr($status),
+            'status_label' => GdaStatus::label($status, $loc),
             'status_comment' => $status === 'annule' ? ($latest?->comment) : null,
+            'status_comment_display' => $status === 'annule' && $latest?->comment
+                ? $presentation->translate(trim($latest->comment), 'comments')
+                : null,
+            'progress_notes_count' => $task->relationLoaded('progressNotes')
+                ? $task->progressNotes->count()
+                : $task->progressNotes()->count(),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function serializeProgressNotes(Task $task, ReportPresentation $presentation): array
+    {
+        $notes = $task->relationLoaded('progressNotes')
+            ? $task->progressNotes
+            : $task->progressNotes()->with('user')->limit(100)->get();
+
+        return $notes->map(fn ($n) => [
+            'id' => $n->id,
+            'progress' => $n->progress,
+            'previous_progress' => $n->previous_progress,
+            'body' => $presentation->translate(trim($n->body), 'comments'),
+            'body_raw' => trim($n->body),
+            'user_name' => $n->user?->name,
+            'created_at' => $n->created_at?->format('d/m/Y H:i'),
+        ])->values()->all();
     }
 }

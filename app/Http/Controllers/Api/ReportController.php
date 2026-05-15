@@ -8,11 +8,16 @@ use App\Models\Photo;
 use App\Models\Project;
 use App\Models\Report;
 use App\Models\Task;
+use App\Support\GdaLocale;
 use App\Support\GdaStatus;
+use App\Support\PdfImageEncoder;
+use App\Support\ProjectStatistics;
+use App\Support\ReportChartStorage;
 use App\Support\ReportPresentation;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class ReportController extends Controller
@@ -55,6 +60,11 @@ class ReportController extends Controller
             'temperature' => ['nullable', 'numeric'],
             'weather' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:10000'],
+            'chart_images' => ['nullable', 'array'],
+            'chart_images.status' => ['nullable', 'string', 'max:12000000'],
+            'chart_images.phase' => ['nullable', 'string', 'max:12000000'],
+            'chart_images.sub' => ['nullable', 'string', 'max:12000000'],
+            'chart_images.act' => ['nullable', 'string', 'max:12000000'],
         ]);
 
         $overall = $project->overallProgress();
@@ -71,7 +81,17 @@ class ReportController extends Controller
             'generated_at' => now(),
         ]);
 
-        $tasks = $this->tasksForPdf($project);
+        $chartImages = $this->sanitizeChartImages($data['chart_images'] ?? null);
+        if ($chartImages !== []) {
+            ReportChartStorage::persist($report->id, $chartImages);
+            Cache::put('report_pdf_charts:'.$report->id, $chartImages, now()->addHours(24));
+        }
+
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
+        $tasks = $this->tasksForPdfCollection($project)
+            ->map(fn (array $row) => $this->localizeTaskRowForApi($row, $presentation))
+            ->values()
+            ->all();
 
         return response()->json([
             'report' => [
@@ -83,6 +103,7 @@ class ReportController extends Controller
                 'overall_progress' => $report->overall_progress,
                 'notes' => $report->notes,
             ],
+            'statistics' => ProjectStatistics::build($project, $presentation),
             'tasks' => $tasks,
         ], 201);
     }
@@ -92,19 +113,37 @@ class ReportController extends Controller
         $project = $this->resolveProject($request);
         abort_unless((int) $report->project_id === (int) $project->id, 404);
 
-        $presentation = ReportPresentation::forLocale((string) $request->query('locale', 'fr'));
+        $locale = (string) $request->query('locale', '') !== ''
+            ? (string) $request->query('locale', 'fr')
+            : GdaLocale::fromRequest($request);
+        $presentation = ReportPresentation::forLocale($locale);
+        $statistics = ProjectStatistics::build($project, $presentation);
+        $chartImages = ReportChartStorage::loadForPdf($report->id);
+        if ($chartImages === []) {
+            $chartImages = Cache::get('report_pdf_charts:'.$report->id, []);
+        }
         $pdfRows = $this->buildPdfRows($project, $presentation);
         $pdfPhotoSections = $this->buildPdfPhotoSections($project, $presentation);
 
         $pdf = Pdf::loadView('reports.pdf', [
             'project' => $project,
             'report' => $report,
+            'statistics' => $statistics,
+            'chartImages' => $chartImages,
             'pdf_rows' => $pdfRows,
             'pdfPhotoSections' => $pdfPhotoSections,
             'projectTitle' => strtoupper($project->name),
             'copy' => $presentation->copy(),
+            'statsCopy' => $presentation->statsCopy(),
             'presentation' => $presentation,
-        ])->setPaper('a4', 'landscape');
+        ])->setPaper('a4', 'landscape')->setOptions([
+            'dpi' => 150,
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isFontSubsettingEnabled' => true,
+            'isRemoteEnabled' => true,
+            'chroot' => storage_path('app'),
+        ]);
 
         $filename = 'rapport-gda-'.$report->report_date->format('Y-m-d').'-'.$report->id.'.pdf';
 
@@ -201,6 +240,23 @@ class ReportController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function localizeTaskRowForApi(array $row, ReportPresentation $presentation): array
+    {
+        return array_merge($row, [
+            'phase' => $presentation->translate($row['phase'], 'phases'),
+            'subphase' => $presentation->translate($row['subphase'], 'subphases'),
+            'activity' => $presentation->translate($row['activity'], 'activities'),
+            'status_label' => $presentation->statusLabel($row['status'], GdaStatus::labelFr($row['status'])),
+            'status_comment' => $row['status_comment']
+                ? $presentation->translate($row['status_comment'], 'comments')
+                : null,
+        ]);
+    }
+
+    /**
      * @return list<array{category: string, title: string, count: int, images: list<string>}>
      */
     protected function buildPdfPhotoSections(Project $project, ReportPresentation $presentation): array
@@ -225,8 +281,10 @@ class ReportController extends Controller
                     continue;
                 }
 
-                $mime = mime_content_type($full) ?: 'image/jpeg';
-                $images[] = 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($full));
+                $encoded = PdfImageEncoder::photoDataUri($full, 1600, 92);
+                if ($encoded !== null) {
+                    $images[] = $encoded;
+                }
             }
 
             if ($images === []) {
@@ -244,10 +302,42 @@ class ReportController extends Controller
         return $sections;
     }
 
+    /**
+     * @param  array<string, mixed>|null  $images
+     * @return array<string, string>
+     */
+    protected function sanitizeChartImages(?array $images): array
+    {
+        if ($images === null || $images === []) {
+            return [];
+        }
+
+        $allowed = ['status', 'phase', 'sub', 'act'];
+        $out = [];
+        foreach ($allowed as $key) {
+            $value = $images[$key] ?? null;
+            if (! is_string($value)) {
+                continue;
+            }
+            if (! preg_match('#^data:image/(png|jpeg|jpg);base64,#i', $value)) {
+                continue;
+            }
+            if (strlen($value) > 12_000_000) {
+                continue;
+            }
+            $out[$key] = $value;
+        }
+
+        return $out;
+    }
+
     protected function estimateReportPageNumber(Project $project): string
     {
         $taskCount = Task::query()->forProject($project->id)->count();
         $pages = max(1, (int) ceil($taskCount / 14));
+        if ($taskCount > 0) {
+            $pages++;
+        }
 
         $photoCategories = Photo::query()
             ->where('project_id', $project->id)

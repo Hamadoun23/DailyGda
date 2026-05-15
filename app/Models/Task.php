@@ -46,6 +46,11 @@ class Task extends Model
         return $this->hasMany(DailyUpdate::class);
     }
 
+    public function progressNotes(): HasMany
+    {
+        return $this->hasMany(TaskProgressNote::class)->orderByDesc('created_at');
+    }
+
     public function latestDailyUpdate(): HasOne
     {
         return $this->hasOne(DailyUpdate::class)->latestOfMany(['report_date', 'id']);

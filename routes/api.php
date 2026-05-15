@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailyUpdateController;
 use App\Http\Controllers\Api\DashboardController;
@@ -20,8 +21,8 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
-    Route::put('/projects/{project}', [ProjectController::class, 'update']);
-    Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+    Route::put('/projects/{projectId}', [ProjectController::class, 'update'])->whereNumber('projectId');
+    Route::delete('/projects/{projectId}', [ProjectController::class, 'destroy'])->whereNumber('projectId');
 
     Route::get('/projects/{project}/phases', [PhaseController::class, 'index']);
     Route::post('/projects/{project}/phases', [PhaseController::class, 'store']);
@@ -36,6 +37,7 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
     Route::get('/project', [ProjectController::class, 'show']);
+    Route::get('/dashboard/export', [DashboardController::class, 'export']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
     Route::get('/tasks', [TaskController::class, 'index']);
@@ -57,4 +59,8 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::get('/reports', [ReportController::class, 'index']);
     Route::get('/reports/{report}/pdf', [ReportController::class, 'pdf']);
+
+    Route::middleware('admin.api')->group(function (): void {
+        Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+    });
 });

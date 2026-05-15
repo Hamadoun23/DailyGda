@@ -29,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'admin.api' => \App\Http\Middleware\EnsureUserIsAdminApi::class,
+            'log.api' => \App\Http\Middleware\LogApiActivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

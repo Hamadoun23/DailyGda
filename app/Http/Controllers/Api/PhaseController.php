@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Phase;
 use App\Models\Project;
 use App\Models\Task;
+use App\Support\GdaLocale;
+use App\Support\ReportPresentation;
 use Illuminate\Http\Request;
 
 class PhaseController extends Controller
@@ -16,6 +18,7 @@ class PhaseController extends Controller
     public function index(Request $request, Project $project)
     {
         $this->authorizeProjectMember($request, $project);
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
 
         $phases = $project->phases()
             ->orderBy('sort_order')
@@ -40,17 +43,17 @@ class PhaseController extends Controller
             'phases' => $phases->map(fn (Phase $phase) => [
                 'id' => $phase->id,
                 'project_id' => $phase->project_id,
-                'name' => $phase->name,
+                'name' => $presentation->translate($phase->name, 'phases'),
                 'sort_order' => $phase->sort_order,
                 'sub_phases' => $phase->subPhases->map(fn ($sp) => [
                     'id' => $sp->id,
                     'phase_id' => $sp->phase_id,
-                    'name' => $sp->name,
+                    'name' => $presentation->translate($sp->name, 'subphases'),
                     'sort_order' => $sp->sort_order,
                     'tasks' => $sp->tasks->map(fn (Task $t) => [
                         'id' => $t->id,
                         'sub_phase_id' => $t->sub_phase_id,
-                        'activity' => $t->activity,
+                        'activity' => $presentation->translate($t->activity, 'activities'),
                         'start_day' => $t->start_day,
                         'duration_days' => $t->duration_days,
                         'sort_order' => $t->sort_order,

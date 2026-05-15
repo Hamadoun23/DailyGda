@@ -87,8 +87,9 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function update(Request $request, Project $project)
+    public function update(Request $request, int $projectId)
     {
+        $project = $this->findProjectOrFail($projectId);
         $this->authorizeProjectMember($request, $project);
 
         $data = $request->validate([
@@ -117,11 +118,23 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Project $project)
+    public function destroy(Request $request, int $projectId)
     {
+        $project = $this->findProjectOrFail($projectId);
         $this->authorizeProjectMember($request, $project);
         $project->delete();
 
         return response()->json(['message' => 'Projet supprimé']);
+    }
+
+    protected function findProjectOrFail(int $projectId): Project
+    {
+        $project = Project::query()->find($projectId);
+
+        if (! $project) {
+            abort(404, 'Ce projet est introuvable ou a déjà été supprimé.');
+        }
+
+        return $project;
     }
 }

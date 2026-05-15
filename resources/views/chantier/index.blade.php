@@ -22,5 +22,7 @@
   window.GDA_IS_PARTNER = false;
 </script>
 <script src="{{ asset('js/report-structure-en.js') }}"></script>
+<script src="{{ asset('js/gda-i18n.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
 <script src="{{ asset('js/gda-app.js') }}"></script>
 @endpush

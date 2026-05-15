@@ -41,12 +41,14 @@ function showLogin() {
 
 /**
  * @param {string} path
- * @param {RequestInit & { projectContextId?: string|number|null }} [options]
+ * @param {RequestInit & { projectContextId?: string|number|null, skipProjectHeader?: boolean }} [options]
  */
 async function apiFetch(path, options = {}) {
   const opts = { ...options };
   const ctxProject = opts.projectContextId;
+  const skipProjectHeader = !!opts.skipProjectHeader;
   delete opts.projectContextId;
+  delete opts.skipProjectHeader;
 
   const headers = {
     Accept: 'application/json',
@@ -61,17 +63,23 @@ async function apiFetch(path, options = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.Authorization = 'Bearer ' + token;
 
-  const pid =
-    ctxProject !== undefined && ctxProject !== null && ctxProject !== ''
-      ? String(ctxProject)
-      : localStorage.getItem(PROJECT_STORAGE_KEY);
-  if (pid) headers['X-Project-Id'] = pid;
+  if (!skipProjectHeader) {
+    const pid =
+      ctxProject !== undefined && ctxProject !== null && ctxProject !== ''
+        ? String(ctxProject)
+        : localStorage.getItem(PROJECT_STORAGE_KEY);
+    if (pid) headers['X-Project-Id'] = pid;
+  }
+
+  if (typeof gdaUiLang === 'function') {
+    headers['X-GDA-Ui-Lang'] = gdaUiLang();
+  }
 
   const res = await fetch(API_BASE + path, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
     clearAuth();
     if (window.GDA_AUTH_REQUIRED) showLogin();
-    throw new Error('Non autorisé');
+    throw new Error(tr('projects.errUnauthorized'));
   }
   if (!res.ok) {
     let msg = res.statusText;
@@ -210,8 +218,8 @@ function dateStrToStartDay(projectStartDate, dateStr) {
 
 function formatTaskScheduleLabel(startDay, durationDays, projectId = structureProjectId) {
   const startDate = startDayToDateStr(getProjectStartDate(projectId), startDay ?? 1);
-  const label = parseDateInput(startDate).toLocaleDateString('fr-FR');
-  return `Début ${label} · ${durationDays ?? 1} j`;
+  const label = parseDateInput(startDate).toLocaleDateString(gdaDateLocale());
+  return trTpl('projects.schedule', { date: label, days: durationDays ?? 1 });
 }
 
 function closeStructureEditor() {
@@ -221,49 +229,29 @@ function closeStructureEditor() {
 }
 
 function editorTitle(config) {
-  const map = {
-    'project:create': 'Nouveau projet',
-    'project:edit': 'Modifier le projet',
-    'project:delete': 'Supprimer le projet',
-    'phase:create': 'Nouvelle phase',
-    'phase:edit': 'Modifier la phase',
-    'subphase:create': 'Nouvelle sous-phase',
-    'subphase:edit': 'Modifier la sous-phase',
-    'task:create': 'Nouvelle activité',
-    'task:edit': 'Modifier l’activité',
-    'task:delete': 'Supprimer l’activité',
-    'phase:delete': 'Supprimer la phase',
-    'subphase:delete': 'Supprimer la sous-phase',
-  };
-  return map[`${config.entity}:${config.action}`] || 'Formulaire';
+  const k = `projects.editor.${config.entity}_${config.action}`;
+  if (!(k in (window.GDA_I18N?.fr || {}))) return tr('projects.editor.defaultTitle');
+  return tr(k);
 }
 
 function editorHint(config) {
-  const map = {
-    'project:create': 'Nommez le chantier avant d’ajouter phases et activités.',
-    'project:edit': 'Le nom est affiché dans la liste des projets et sur le chantier.',
-    'phase:create': 'Une phase regroupe plusieurs sous-phases.',
-    'phase:edit': 'Le libellé est visible dans la structure et sur le chantier.',
-    'subphase:create': 'La sous-phase accueillera les activités du chantier.',
-    'subphase:edit': 'Le libellé est visible dans la structure et sur le chantier.',
-    'task:create': 'Définissez l’activité, sa date de début et sa durée.',
-    'task:edit': 'Ajustez le libellé, la date de début et la durée de l’activité.',
-  };
-  return map[`${config.entity}:${config.action}`] || '';
+  const k = `projects.hint.${config.entity}_${config.action}`;
+  return tr(k) || '';
 }
 
 function editorDeleteMessage(config) {
   if (config.entity === 'project' && config.action === 'delete') {
-    const name = config.data?.name || 'ce projet';
-    return `Le projet « ${name} » et toute sa structure (phases, sous-phases, activités) seront supprimés définitivement.`;
+    const name = config.data?.name || tr('projects.thisProject');
+    return trTpl('projects.delProject', { name });
   }
 
   const map = {
-    'task:delete': 'Cette activité sera retirée du chantier.',
-    'phase:delete': 'La phase et tout son contenu (sous-phases, activités) seront supprimés.',
-    'subphase:delete': 'La sous-phase et ses activités seront supprimées.',
+    'task:delete': 'projects.delTask',
+    'phase:delete': 'projects.delPhase',
+    'subphase:delete': 'projects.delSubphase',
   };
-  return map[`${config.entity}:${config.action}`] || 'Confirmez la suppression.';
+  const key = map[`${config.entity}:${config.action}`];
+  return key ? tr(key) : tr('projects.delConfirmDefault');
 }
 
 function renderStructureEditorFields(config) {
@@ -273,16 +261,16 @@ function renderStructureEditorFields(config) {
     const startDate = startDayToDateStr(getProjectStartDate(projectId), data.start_day ?? 1);
     return `
       <div class="form-group" style="margin-bottom:14px">
-        <label class="form-label" for="structure-editor-activity">Activité</label>
+        <label class="form-label" for="structure-editor-activity">${escapeHtml(tr('projects.lblActivity'))}</label>
         <input type="text" id="structure-editor-activity" value="${escapeAttr(data.activity || '')}" required maxlength="500">
       </div>
       <div class="form-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
         <div class="form-group">
-          <label class="form-label" for="structure-editor-start-date">Date de début</label>
+          <label class="form-label" for="structure-editor-start-date">${escapeHtml(tr('projects.lblStartDate'))}</label>
           <input type="date" id="structure-editor-start-date" value="${escapeAttr(startDate)}" required>
         </div>
         <div class="form-group">
-          <label class="form-label" for="structure-editor-duration-days">Durée (jours)</label>
+          <label class="form-label" for="structure-editor-duration-days">${escapeHtml(tr('projects.lblDurationDays'))}</label>
           <input type="number" id="structure-editor-duration-days" min="1" step="1" value="${escapeAttr(String(data.duration_days ?? 1))}" required>
         </div>
       </div>`;
@@ -290,10 +278,10 @@ function renderStructureEditorFields(config) {
 
   const label =
     config.entity === 'project'
-      ? 'Nom du projet'
+      ? tr('projects.lblProjectName')
       : config.entity === 'phase'
-        ? 'Nom de la phase'
-        : 'Nom de la sous-phase';
+        ? tr('projects.lblPhaseName')
+        : tr('projects.lblSubphaseName');
 
   return `
     <div class="form-group" style="margin-bottom:14px">
@@ -348,15 +336,15 @@ function readStructureEditorValues() {
     const durationDays = Number(document.getElementById('structure-editor-duration-days')?.value);
     const projectId = structureEditorState.projectId ?? structureProjectId;
     const startDay = dateStrToStartDay(getProjectStartDate(projectId), startDate);
-    if (!activity) throw new Error('Le libellé de l’activité est obligatoire.');
-    if (!startDate) throw new Error('La date de début est obligatoire.');
-    if (!Number.isInteger(startDay) || startDay < 1) throw new Error('Date de début invalide.');
-    if (!Number.isInteger(durationDays) || durationDays < 1) throw new Error('Durée invalide.');
+    if (!activity) throw new Error(tr('projects.errActivityRequired'));
+    if (!startDate) throw new Error(tr('projects.errStartRequired'));
+    if (!Number.isInteger(startDay) || startDay < 1) throw new Error(tr('projects.errStartInvalid'));
+    if (!Number.isInteger(durationDays) || durationDays < 1) throw new Error(tr('projects.errDurationInvalid'));
     return { activity, start_day: startDay, duration_days: durationDays };
   }
 
   const name = document.getElementById('structure-editor-name')?.value.trim() || '';
-  if (!name) throw new Error('Le nom est obligatoire.');
+  if (!name) throw new Error(tr('projects.errNameRequired'));
   return { name };
 }
 
@@ -374,20 +362,20 @@ async function submitStructureEditor(event) {
           method: 'POST',
           body: JSON.stringify({ name: values.name, status: 'planifie' }),
         });
-        toast('Projet créé — cliquez sur « Phases » pour la suite.', 'ok');
+        toast(tr('projects.toast.projectCreated'), 'ok');
         await refreshProjectList();
       } else {
         const projectId = structureEditorState.projectId;
         await apiFetch(`/projects/${projectId}`, {
           method: 'PUT',
           body: JSON.stringify({ name: values.name }),
-          projectContextId: projectId,
+          skipProjectHeader: true,
         });
-        toast('Projet mis à jour', 'ok');
+        toast(tr('projects.toast.projectUpdated'), 'ok');
         if (structureProjectId === projectId) {
           structureProjectName = values.name;
           const title = document.getElementById('structure-panel-title');
-          if (title) title.textContent = 'Structure — ' + structureProjectName;
+          if (title) title.textContent = structureProjectName;
         }
         await refreshProjectList();
       }
@@ -399,7 +387,7 @@ async function submitStructureEditor(event) {
           body: JSON.stringify({ name: values.name }),
           projectContextId: projectId,
         });
-        toast('Phase ajoutée', 'ok');
+        toast(tr('projects.toast.phaseAdded'), 'ok');
         await loadStructureTree();
         await refreshProjectList();
       } else {
@@ -408,7 +396,7 @@ async function submitStructureEditor(event) {
           body: JSON.stringify({ name: values.name }),
           projectContextId: projectId,
         });
-        toast('Phase mise à jour', 'ok');
+        toast(tr('projects.toast.phaseUpdated'), 'ok');
         await loadStructureTree();
       }
     } else if (entity === 'subphase') {
@@ -419,7 +407,7 @@ async function submitStructureEditor(event) {
           body: JSON.stringify({ name: values.name }),
           projectContextId: projectId,
         });
-        toast('Sous-phase ajoutée', 'ok');
+        toast(tr('projects.toast.subAdded'), 'ok');
         await loadStructureTree();
       } else {
         await apiFetch(`/sub-phases/${structureEditorState.subPhaseId}`, {
@@ -427,7 +415,7 @@ async function submitStructureEditor(event) {
           body: JSON.stringify({ name: values.name }),
           projectContextId: projectId,
         });
-        toast('Sous-phase mise à jour', 'ok');
+        toast(tr('projects.toast.subUpdated'), 'ok');
         await loadStructureTree();
       }
     } else if (entity === 'task') {
@@ -443,7 +431,7 @@ async function submitStructureEditor(event) {
           }),
           projectContextId: projectId,
         });
-        toast('Activité ajoutée', 'ok');
+        toast(tr('projects.toast.taskAdded'), 'ok');
         await loadStructureTree();
         await refreshProjectList();
       } else {
@@ -452,7 +440,7 @@ async function submitStructureEditor(event) {
           body: JSON.stringify(values),
           projectContextId: projectId,
         });
-        toast('Activité mise à jour', 'ok');
+        toast(tr('projects.toast.taskUpdated'), 'ok');
         await loadStructureTree();
         await refreshProjectList();
       }
@@ -460,7 +448,7 @@ async function submitStructureEditor(event) {
 
     closeStructureEditor();
   } catch (err) {
-    toast(err.message || 'Erreur', 'err');
+    toast(err.message || tr('projects.errGeneric'), 'err');
   }
 }
 
@@ -474,7 +462,7 @@ async function confirmStructureEditorDelete() {
         method: 'DELETE',
         projectContextId: projectId,
       });
-      toast('Activité supprimée', 'ok');
+      toast(tr('projects.toast.taskDeleted'), 'ok');
       await loadStructureTree();
       await refreshProjectList();
     } else if (structureEditorState.entity === 'phase') {
@@ -482,7 +470,7 @@ async function confirmStructureEditorDelete() {
         method: 'DELETE',
         projectContextId: projectId,
       });
-      toast('Phase supprimée', 'ok');
+      toast(tr('projects.toast.phaseDeleted'), 'ok');
       await loadStructureTree();
       await refreshProjectList();
     } else if (structureEditorState.entity === 'subphase') {
@@ -490,15 +478,19 @@ async function confirmStructureEditorDelete() {
         method: 'DELETE',
         projectContextId: projectId,
       });
-      toast('Sous-phase supprimée', 'ok');
+      toast(tr('projects.toast.subDeleted'), 'ok');
       await loadStructureTree();
       await refreshProjectList();
     } else if (structureEditorState.entity === 'project') {
-      await apiFetch(`/projects/${structureEditorState.projectId}`, {
+      const projectId = structureEditorState.projectId;
+      if (!projectId) {
+        throw new Error(tr('projects.errProjectNotFound'));
+      }
+      await apiFetch(`/projects/${projectId}`, {
         method: 'DELETE',
-        projectContextId: structureEditorState.projectId,
+        skipProjectHeader: true,
       });
-      toast('Projet supprimé', 'ok');
+      toast(tr('projects.toast.projectDeleted'), 'ok');
       if (structureProjectId === structureEditorState.projectId) {
         closeStructurePanel();
       }
@@ -510,7 +502,10 @@ async function confirmStructureEditorDelete() {
     }
     closeStructureEditor();
   } catch (err) {
-    toast(err.message || 'Erreur', 'err');
+    toast(err.message || tr('projects.errGeneric'), 'err');
+    if (structureEditorState?.entity === 'project') {
+      await refreshProjectList();
+    }
   }
 }
 
@@ -550,7 +545,7 @@ function bindProjectTableOnce(tbody) {
     if (projectRow && !e.target.closest('button')) {
       const id = Number(projectRow.getAttribute('data-project-id'));
       const row = cachedProjects.find(x => Number(x.id) === id);
-      openStructurePanel(id, row ? row.name : 'Projet');
+      openStructurePanel(id, row ? row.name : tr('projects.defaultProjectName'));
     }
   });
 }
@@ -565,6 +560,7 @@ function renderProjects(projects) {
   loading.style.display = 'none';
 
   if (!projects.length) {
+    empty.textContent = tr('projects.empty');
     empty.style.display = 'block';
     table.style.display = 'none';
     return;
@@ -580,15 +576,15 @@ function renderProjects(projects) {
       const isCur = cur && String(p.id) === String(cur);
       return `
       <tr class="project-row" data-project-id="${p.id}" style="cursor:pointer">
-        <td><strong>${escapeHtml(p.name)}</strong>${isCur ? ' <span style="color:var(--accent);font-size:11px">· ouvert</span>' : ''}</td>
+        <td><strong>${escapeHtml(p.name)}</strong>${isCur ? ` <span style="color:var(--accent);font-size:11px">${escapeHtml(tr('projects.openBadge'))}</span>` : ''}</td>
         <td>${escapeHtml(p.status || '—')}</td>
         <td style="text-align:center;font-weight:700;color:var(--accent2)">${p.overall_progress ?? 0}%</td>
         <td style="text-align:center">${p.tasks_count ?? 0}</td>
         <td style="text-align:right">
           <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
-          <button type="button" class="btn btn-secondary btn-sm project-edit-btn" data-id="${p.id}">Modifier</button>
-          <button type="button" class="btn btn-secondary btn-sm project-del-btn" data-id="${p.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">Supprimer</button>
-          <button type="button" class="btn btn-primary btn-sm open-project-btn" data-id="${p.id}">Chantier</button>
+          <button type="button" class="btn btn-secondary btn-sm project-edit-btn" data-id="${p.id}">${escapeHtml(tr('projects.btnEdit'))}</button>
+          <button type="button" class="btn btn-secondary btn-sm project-del-btn" data-id="${p.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">${escapeHtml(tr('projects.btnDelete'))}</button>
+          <button type="button" class="btn btn-primary btn-sm open-project-btn" data-id="${p.id}">${escapeHtml(tr('projects.btnChantier'))}</button>
           </div>
         </td>
       </tr>`;
@@ -617,6 +613,7 @@ async function loadStructureTree() {
     loading.style.display = 'none';
 
     if (!phases.length) {
+      empty.textContent = tr('projects.structureEmpty');
       empty.style.display = 'block';
       tree.innerHTML = '';
       return;
@@ -636,7 +633,11 @@ async function loadStructureTree() {
             (ph.sub_phases || []).reduce((subSum, sp) => subSum + (sp.tasks ? sp.tasks.length : 0), 0),
           0
         );
-      stats.textContent = `${phaseCount} phases · ${subCount} sous-phases · ${taskCount} activités`;
+      stats.textContent = trTpl('projects.stats', {
+        phases: phaseCount,
+        subs: subCount,
+        tasks: taskCount,
+      });
       stats.style.display = 'block';
     }
     tree.innerHTML = phases
@@ -646,9 +647,9 @@ async function loadStructureTree() {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <strong style="font-size:15px;color:var(--accent2)">${escapeHtml(ph.name)}</strong>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button type="button" class="btn btn-secondary btn-sm phase-edit-btn" data-phase-id="${ph.id}" data-name="${escapeAttr(ph.name)}">Modifier</button>
-            <button type="button" class="btn btn-secondary btn-sm subphase-add-btn" data-phase-id="${ph.id}">+ Sous-phase</button>
-            <button type="button" class="btn btn-secondary btn-sm phase-del-btn" data-phase-id="${ph.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">Supprimer phase</button>
+            <button type="button" class="btn btn-secondary btn-sm phase-edit-btn" data-phase-id="${ph.id}" data-name="${escapeAttr(ph.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
+            <button type="button" class="btn btn-secondary btn-sm subphase-add-btn" data-phase-id="${ph.id}">${escapeHtml(tr('projects.subphaseAdd'))}</button>
+            <button type="button" class="btn btn-secondary btn-sm phase-del-btn" data-phase-id="${ph.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">${escapeHtml(tr('projects.phaseDel'))}</button>
           </div>
         </div>
         <ul style="margin:12px 0 0 0;padding:0 0 0 18px;list-style:none">
@@ -665,28 +666,28 @@ async function loadStructureTree() {
                 <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatTaskScheduleLabel(t.start_day, t.duration_days)}</div>
               </div>
               <div style="display:flex;gap:6px;flex-shrink:0">
-              <button type="button" class="btn btn-secondary btn-sm task-edit-btn" data-task-id="${t.id}" data-activity="${escapeAttr(t.activity)}" data-start-day="${t.start_day ?? 1}" data-duration-days="${t.duration_days ?? 1}" style="font-size:10px">Modifier</button>
-              <button type="button" class="btn btn-secondary btn-sm task-del-btn" data-task-id="${t.id}" style="font-size:10px;color:var(--danger)">Supprimer</button>
+              <button type="button" class="btn btn-secondary btn-sm task-edit-btn" data-task-id="${t.id}" data-activity="${escapeAttr(t.activity)}" data-start-day="${t.start_day ?? 1}" data-duration-days="${t.duration_days ?? 1}" style="font-size:10px">${escapeHtml(tr('projects.btnEdit'))}</button>
+              <button type="button" class="btn btn-secondary btn-sm task-del-btn" data-task-id="${t.id}" style="font-size:10px;color:var(--danger)">${escapeHtml(tr('projects.btnDelete'))}</button>
               </div>
             </li>`
                     )
                     .join('')
-                : '<li style="color:var(--muted);font-size:12px;padding:6px 0">Aucune activité — utilisez « + Activité ».</li>';
+                : `<li style="color:var(--muted);font-size:12px;padding:6px 0">${escapeHtml(tr('projects.treeNoTasks'))}</li>`;
               return `
             <li style="padding:10px 0;border-bottom:1px dashed var(--border2)">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
                 <span style="font-weight:600">${escapeHtml(sp.name)}</span>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button type="button" class="btn btn-secondary btn-sm subphase-edit-btn" data-sub-id="${sp.id}" data-name="${escapeAttr(sp.name)}">Modifier</button>
-                  <button type="button" class="btn btn-secondary btn-sm task-add-btn" data-sub-id="${sp.id}">+ Activité</button>
-                  <button type="button" class="btn btn-secondary btn-sm subphase-del-btn" data-sub-id="${sp.id}" style="font-size:10px;color:var(--danger);flex-shrink:0">Retirer</button>
+                  <button type="button" class="btn btn-secondary btn-sm subphase-edit-btn" data-sub-id="${sp.id}" data-name="${escapeAttr(sp.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
+                  <button type="button" class="btn btn-secondary btn-sm task-add-btn" data-sub-id="${sp.id}">${escapeHtml(tr('projects.taskAdd'))}</button>
+                  <button type="button" class="btn btn-secondary btn-sm subphase-del-btn" data-sub-id="${sp.id}" style="font-size:10px;color:var(--danger);flex-shrink:0">${escapeHtml(tr('projects.remove'))}</button>
                 </div>
               </div>
               <ul style="margin:10px 0 0 14px;padding:0 0 0 12px;list-style:none;border-left:2px solid var(--border2)">${taskRows}</ul>
             </li>`;
             })
             .join('') ||
-            '<li style="color:var(--muted);font-size:13px;padding:8px 0">Aucune sous-phase — utilisez « + Sous-phase ».</li>'}
+            '<li style="color:var(--muted);font-size:13px;padding:8px 0">' + escapeHtml(tr('projects.treeNoSubphases')) + '</li>'}
         </ul>
       </div>`
       )
@@ -694,19 +695,19 @@ async function loadStructureTree() {
   } catch (e) {
     loading.style.display = 'none';
     empty.style.display = 'block';
-    empty.textContent = e.message || 'Erreur de chargement.';
-    toast(e.message || 'Erreur', 'err');
+    empty.textContent = e.message || tr('projects.errLoad');
+    toast(e.message || tr('projects.errGeneric'), 'err');
   }
 }
 
 function openStructurePanel(projectId, name) {
   closeStructureEditor();
   structureProjectId = projectId;
-  structureProjectName = name || 'Projet';
+  structureProjectName = name || tr('projects.defaultProjectName');
   const panel = document.getElementById('structure-panel');
   const title = document.getElementById('structure-panel-title');
   panel.style.display = 'block';
-  title.textContent = 'Structure — ' + structureProjectName;
+  title.textContent = structureProjectName;
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   loadStructureTree();
 }
@@ -715,11 +716,15 @@ function closeStructurePanel() {
   structureProjectId = null;
   structureProjectName = '';
   document.getElementById('structure-panel').style.display = 'none';
+  const title = document.getElementById('structure-panel-title');
+  if (title) title.textContent = tr('projects.structureIntro');
   closeStructureEditor();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const authRequired = !!window.GDA_AUTH_REQUIRED;
+  applyI18nDocument();
+  syncUiLangButtons();
   try {
     const { user } = await apiFetch('/whoami');
     const av = document.getElementById('user-av');
@@ -733,7 +738,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const nm = document.getElementById('user-nm');
-    if (nm) nm.textContent = 'Invité';
+    if (nm) nm.textContent = tr('projects.guest');
   }
 
   const tbody = document.getElementById('projects-tbody');
@@ -883,7 +888,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('projects-loading').style.display = 'none';
     document.getElementById('projects-empty').style.display = 'block';
     document.getElementById('projects-empty').textContent =
-      e.message || 'Impossible de charger les projets (vérifiez que MySQL tourne et que php artisan migrate --seed a été exécuté).';
-    toast(e.message || 'Erreur chargement', 'err');
+      e.message || tr('projects.errLoadList');
+    toast(e.message || tr('projects.errGeneric'), 'err');
   }
 });
+
+window.gdaOnUiLangChange = function gdaProjectsOnUiLangChange() {
+  renderProjects(cachedProjects);
+  const panel = document.getElementById('structure-panel');
+  const titleEl = document.getElementById('structure-panel-title');
+  if (titleEl && panel && panel.style.display === 'none') {
+    titleEl.textContent = tr('projects.structureIntro');
+  } else if (titleEl && structureProjectName) {
+    titleEl.textContent = structureProjectName;
+  }
+  if (structureProjectId) void loadStructureTree();
+  const editorPanel = document.getElementById('structure-editor-panel');
+  if (structureEditorState && editorPanel && editorPanel.style.display !== 'none') {
+    openStructureEditor(structureEditorState);
+  }
+};

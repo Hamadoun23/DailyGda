@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Rapport chantier GDA</title>
     <style>
-        @page { margin: 8mm; size: A4 landscape; }
+        @page { margin: 10mm; size: A4 landscape; }
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #1a1814; margin: 0; padding: 10px; }
         .rp-header { display: table; width: 100%; border-bottom: 3px solid #1a3a5c; padding-bottom: 12px; margin-bottom: 12px; }
         .rp-header-left { display: table-cell; width: 72%; vertical-align: top; text-align: center; }
@@ -96,7 +96,10 @@
         }
         table.photo-grid img {
             width: 100%;
-            height: 175px;
+            height: auto;
+            min-height: 200px;
+            max-height: 220px;
+            object-fit: cover;
             border: 1px solid #d5cfc2;
             border-radius: 6px;
             display: block;
@@ -106,9 +109,53 @@
         .st-nondemarre { color: #8a8070; font-weight: bold; }
         .st-annule { color: #c01a1a; font-weight: bold; }
         .status-note { display: block; font-size: 10px; font-weight: normal; margin-top: 3px; color: #8a8070; }
+        .rp-stats-page { page-break-after: always; margin-bottom: 8px; }
+        .rp-stats-main-title { font-size: 16px; font-weight: bold; color: #1a3a5c; margin-bottom: 6px; }
+        .rp-stats-project { font-size: 12px; margin-bottom: 12px; color: #6b6358; }
+        .rp-stats-block-title { font-size: 11px; font-weight: bold; color: #8b2c1c; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .rp-kpi { background: #f4f1eb; border-radius: 6px; padding: 10px 8px; text-align: center; border: 1px solid #e0ddd5; }
+        .rp-kpi-val { font-size: 22px; font-weight: bold; color: #1a3a5c; }
+        .rp-kpi-lbl { font-size: 9px; color: #6b6358; margin-top: 4px; }
+        .rp-kpi-ok .rp-kpi-val { color: #1a7a42; }
+        .rp-kpi-warn .rp-kpi-val { color: #c8521a; }
+        .rp-kpi-danger .rp-kpi-val { color: #c01a1a; }
+        table.rp-mini-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 8px; }
+        table.rp-mini-table th { background: #e8e4dc; padding: 5px 6px; text-align: left; font-size: 9px; }
+        table.rp-mini-table td { border-bottom: 0.5px solid #e0ddd5; padding: 4px 6px; }
+        .rp-report-data-section { page-break-before: always; }
+        .rp-data-section-title { font-size: 16px; font-weight: bold; color: #1a3a5c; margin-bottom: 10px; }
+        .rp-stats-intro { font-size: 10px; color: #6b6358; margin: 0 0 12px; line-height: 1.45; }
+        .rp-stats-missing-charts { font-size: 10px; color: #8a8070; margin: 12px 0; }
+        .rp-pdf-charts-grid { width: 100%; }
+        .rp-pdf-chart-cell { vertical-align: top; }
+        .rp-stats-block-title { margin-bottom: 6px; }
+        .rp-pdf-chart-img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid #e0ddd5;
+            border-radius: 6px;
+            background: #faf8f4;
+        }
+        .rp-pdf-chart-img--pie,
+        .rp-pdf-chart-img--phase {
+            min-height: 200px;
+        }
+        .rp-pdf-chart-img--sub {
+            min-height: 280px;
+        }
+        .rp-pdf-chart-img--act {
+            min-height: 300px;
+        }
     </style>
 </head>
 <body>
+    <div class="rp-stats-page">
+        @include('reports.partials.stats')
+    </div>
+
+    <div class="rp-report-data-section">
+    <div class="rp-data-section-title">{{ $statsCopy['data_section'] ?? 'Données du rapport' }}</div>
     <div class="rp-header">
         <div class="rp-header-left">
             <div class="rp-brand">{{ $projectTitle }}</div>
@@ -167,6 +214,7 @@
 
     <div class="footer-band">{{ $copy['overall_progress'] }}</div>
     <div class="footer-pct">{{ $report->overall_progress }}%</div>
+    </div>
 
     @foreach ($pdfPhotoSections as $section)
     <div class="photo-page">
