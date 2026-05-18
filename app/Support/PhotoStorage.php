@@ -38,11 +38,6 @@ final class PhotoStorage
             throw new \InvalidArgumentException('Données image invalides (base64).');
         }
 
-        $maxBytes = (int) config('gda.photo_max_upload_kb', 65536) * 1024;
-        if (strlen($bytes) > $maxBytes) {
-            throw new \InvalidArgumentException('Image trop volumineuse (max '.(int) floor($maxBytes / 1024 / 1024).' Mo).');
-        }
-
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'jpg');
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
             $ext = 'jpg';

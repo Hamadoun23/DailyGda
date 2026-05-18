@@ -342,12 +342,7 @@ async function apiFetch(path, options = {}) {
     let msg = res.statusText;
     try {
       const j = await res.json();
-      if (j.errors && typeof j.errors === 'object') {
-        const first = Object.values(j.errors).flat().find(Boolean);
-        if (first) msg = String(first);
-      } else if (j.message) {
-        msg = j.message;
-      }
+      msg = formatApiErrorMessage(j) || msg;
     } catch (_) {
       if (res.status === 419) msg = 'Session expirée — reconnectez-vous.';
       else if (res.status === 413) msg = 'Fichier trop volumineux (limite serveur web).';
@@ -1679,6 +1674,28 @@ function compressImageFile(file, maxEdge = 2560, quality = 0.88) {
 /** Envoie le fichier original — pas de compression navigateur (évite les échecs sur 6000×4000, etc.). */
 async function preparePhotoForUpload(file) {
   return file;
+}
+
+function formatApiErrorMessage(j) {
+  if (!j) return '';
+  const known = {
+    'validation.uploaded': 'Échec de l’envoi fichier. Rechargez la page (Ctrl+F5) et réessayez.',
+    'validation.required': 'Champ obligatoire manquant.',
+    'validation.max.string': 'Données trop volumineuses pour le serveur.',
+  };
+  if (j.errors && typeof j.errors === 'object') {
+    for (const arr of Object.values(j.errors)) {
+      const raw = Array.isArray(arr) ? arr[0] : arr;
+      if (!raw) continue;
+      const key = String(raw);
+      if (known[key]) return known[key];
+      if (key.startsWith('validation.')) {
+        return 'Erreur serveur (« '+key+' »). Rechargez la page (Ctrl+F5).';
+      }
+      return key;
+    }
+  }
+  return j.message ? String(j.message) : '';
 }
 
 function formatPhotoUploadError(message, file) {

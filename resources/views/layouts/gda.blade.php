@@ -4,7 +4,11 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'GDA — Gestion de Chantier')</title>
     @php
-        $gdaAssetVer = (string) (@filemtime(public_path('css/gda.css')) ?: time());
+        $gdaAssetVer = (string) max(
+            @filemtime(public_path('css/gda.css')) ?: 0,
+            @filemtime(public_path('js/gda-app.js')) ?: 0,
+            @filemtime(public_path('js/gda-i18n.js')) ?: 0,
+        ) ?: time();
     @endphp
     <link rel="icon" type="image/jpeg" href="{{ asset('img/Constfondblanc.jpg') }}?v={{ $gdaAssetVer }}">
     <link rel="apple-touch-icon" href="{{ asset('img/Constfondblanc.jpg') }}?v={{ $gdaAssetVer }}">

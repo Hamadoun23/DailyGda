@@ -65,17 +65,11 @@ class PhotoController extends Controller
     public function store(Request $request)
     {
         $project = $this->resolveProject($request);
-        $maxKb = (int) config('gda.photo_max_upload_kb', 65536);
 
-        $data = $request->validate([
+        $base = $request->validate([
             'category' => ['required', 'in:avant,pendant,apres,securite,qualite'],
-            'photo' => ['nullable', 'file', 'max:'.$maxKb],
-            'photo_base64' => ['nullable', 'string', 'max:'.((int) config('gda.photo_max_base64_chars', 28_000_000))],
-            'photo_name' => ['nullable', 'string', 'max:255'],
             'caption' => ['nullable', 'string', 'max:500'],
             'taken_at' => ['nullable', 'date'],
-        ], [
-            'photo.max' => 'La photo dépasse '.(int) floor($maxKb / 1024).' Mo.',
         ]);
 
         PhotoStorage::ensurePublicRoot();
@@ -84,11 +78,24 @@ class PhotoController extends Controller
         $path = null;
 
         try {
-            if ($request->hasFile('photo')) {
+            // Priorité : base64 JSON (ne passe pas par $_FILES / règle « file »)
+            if ($request->filled('photo_base64')) {
+                $request->validate([
+                    'photo_base64' => ['required', 'string'],
+                    'photo_name' => ['nullable', 'string', 'max:255'],
+                ]);
+
+                $originalName = (string) ($request->input('photo_name') ?: 'photo.jpg');
+                $path = PhotoStorage::storeFromBase64(
+                    (string) $request->input('photo_base64'),
+                    $originalName,
+                    $base['category'],
+                );
+            } elseif ($request->hasFile('photo')) {
                 $file = $request->file('photo');
                 if (! $file->isValid()) {
                     throw ValidationException::withMessages([
-                        'photo' => [$file->getErrorMessage() ?: $this->uploadIniHint()],
+                        'photo' => [$file->getErrorMessage() ?: 'Fichier refusé par PHP (upload_max_filesize).'],
                     ]);
                 }
                 $ext = $this->resolveExtension($file);
@@ -97,18 +104,11 @@ class PhotoController extends Controller
                         'photo' => ['Format non supporté. Utilisez JPG, PNG, GIF ou WebP.'],
                     ]);
                 }
-                $path = PhotoStorage::storeUploaded($file, $data['category']);
+                $path = PhotoStorage::storeUploaded($file, $base['category']);
                 $originalName = $file->getClientOriginalName() ?: $originalName;
-            } elseif ($request->filled('photo_base64')) {
-                $originalName = (string) ($data['photo_name'] ?? 'photo.jpg');
-                $path = PhotoStorage::storeFromBase64(
-                    (string) $request->input('photo_base64'),
-                    $originalName,
-                    $data['category'],
-                );
             } else {
                 throw ValidationException::withMessages([
-                    'photo' => [$this->missingFileMessage($request)],
+                    'photo' => ['Aucune image reçue. Rechargez la page (Ctrl+F5) puis réessayez.'],
                 ]);
             }
         } catch (ValidationException $e) {
@@ -132,11 +132,11 @@ class PhotoController extends Controller
         $photo = Photo::create([
             'project_id' => $project->id,
             'user_id' => $request->user()->id,
-            'category' => $data['category'],
+            'category' => $base['category'],
             'path' => $path,
             'original_name' => $originalName,
-            'caption' => $data['caption'] ?? null,
-            'taken_at' => $data['taken_at'] ?? null,
+            'caption' => $base['caption'] ?? null,
+            'taken_at' => $base['taken_at'] ?? null,
             'file_size' => Storage::disk('public')->size($path),
         ]);
 
@@ -176,33 +176,5 @@ class PhotoController extends Controller
             'image/webp' => 'webp',
             default => '',
         };
-    }
-
-    private function uploadIniHint(): string
-    {
-        return 'Upload PHP refusé (upload_max_filesize='.ini_get('upload_max_filesize')
-            .', post_max_size='.ini_get('post_max_size').').';
-    }
-
-    private function missingFileMessage(Request $request): string
-    {
-        $phpUpload = ini_get('upload_max_filesize');
-        $phpPost = ini_get('post_max_size');
-        $filesKeys = array_keys($_FILES);
-        $photoErr = $_FILES['photo']['error'] ?? null;
-
-        $hint = 'PHP web : upload_max_filesize='.$phpUpload.', post_max_size='.$phpPost;
-        if ($photoErr !== null) {
-            $hint .= ', erreur fichier='.$photoErr;
-        }
-        if ($filesKeys === []) {
-            $hint .= ' — $_FILES vide (multipart souvent bloqué sur cet hébergeur ; utilisez l’envoi base64).';
-        }
-
-        if ($request->filled('category') && ! $request->hasFile('photo') && ! $request->filled('photo_base64')) {
-            return 'Aucune image reçue. '.$hint;
-        }
-
-        return 'Aucun fichier reçu. '.$hint;
     }
 }
