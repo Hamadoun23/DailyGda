@@ -342,7 +342,12 @@ async function apiFetch(path, options = {}) {
     let msg = res.statusText;
     try {
       const j = await res.json();
-      msg = j.message || (j.errors && JSON.stringify(j.errors)) || msg;
+      if (j.errors && typeof j.errors === 'object') {
+        const first = Object.values(j.errors).flat().find(Boolean);
+        if (first) msg = String(first);
+      } else if (j.message) {
+        msg = j.message;
+      }
     } catch (_) {}
     throw new Error(msg);
   }
@@ -1609,22 +1614,130 @@ function emptyPhotos() {
   </div>`;
 }
 
+function isLikelyImageFile(file) {
+  if (!file) return false;
+  if (file.type && file.type.startsWith('image/')) return true;
+  return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(file.name || '');
+}
+
+function readImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('invalid'));
+    };
+    img.src = url;
+  });
+}
+
+function compressImageFile(file, maxEdge = 2560, quality = 0.88) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      const scale = Math.min(1, maxEdge / Math.max(w, h, 1));
+      w = Math.max(1, Math.round(w * scale));
+      h = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        blob => {
+          if (!blob) {
+            reject(new Error(tr('photo.compressErr') || 'Compression impossible'));
+            return;
+          }
+          const base = (file.name || 'photo').replace(/\.[^.]+$/i, '');
+          resolve(new File([blob], base + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+        },
+        'image/jpeg',
+        quality,
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(tr('photo.invalidImg') || 'Image illisible'));
+    };
+    img.src = url;
+  });
+}
+
+/** Compression navigateur uniquement pour les très gros fichiers (> 12 Mo). */
+async function preparePhotoForUpload(file) {
+  const maxBytes = 12 * 1024 * 1024;
+  const maxEdge = 4096;
+  if (file.size <= maxBytes) {
+    try {
+      const dims = await readImageDimensions(file);
+      if (dims && Math.max(dims.w, dims.h) <= maxEdge) return file;
+    } catch (_) {
+      return file;
+    }
+  }
+  return compressImageFile(file, maxEdge, 0.9);
+}
+
+function formatPhotoUploadError(message, file) {
+  const msg = String(message || '');
+  if (/too large|trop volumineux|20\s*mo|upload_max|post_max|413/i.test(msg)) {
+    return tr('photo.tooLarge') || 'Fichier trop lourd pour le serveur (souvent max 2 Mo). Réessayez : l’image sera compressée automatiquement.';
+  }
+  if (/mimes|format|image/i.test(msg) && /non support/i.test(msg)) {
+    return tr('photo.badFormat') || 'Format non supporté (JPG, PNG, GIF, WebP).';
+  }
+  return msg || tr('common.error') || 'Erreur';
+}
+
 async function addPhotos(tab, files) {
   if (isSiteReadOnly()) return;
+  let ok = 0;
+  let fail = 0;
+  let skip = 0;
   for (const file of Array.from(files)) {
-    if (!file.type.startsWith('image/')) continue;
+    if (!isLikelyImageFile(file)) {
+      skip++;
+      continue;
+    }
+    let uploadFile = file;
+    try {
+      uploadFile = await preparePhotoForUpload(file);
+    } catch (e) {
+      fail++;
+      toast((file.name || 'Image') + ' — ' + (e.message || tr('photo.compressErr')), 'err');
+      continue;
+    }
     const fd = new FormData();
-    fd.append('photo', file);
+    fd.append('photo', uploadFile);
     fd.append('category', tab);
     try {
       await apiFetch('/photos', { method: 'POST', body: fd });
+      ok++;
     } catch (e) {
-      toast(e.message || 'Erreur upload', 'err');
+      fail++;
+      toast((file.name || 'Image') + ' — ' + formatPhotoUploadError(e.message, file), 'err');
     }
   }
   await loadPhotosCategory(tab);
   renderPhotos();
-  toast('Photo(s) envoyée(s)', 'ok');
+  if (ok > 0 && fail === 0 && skip === 0) {
+    toast(tr('photo.uploadOk') || 'Photo(s) envoyée(s)', 'ok');
+  } else if (ok > 0) {
+    toast(trTpl('photo.uploadPartial', { ok, fail, skip }) || `${ok} photo(s) envoyée(s).`, fail > 0 ? 'err' : 'ok');
+  } else if (skip > 0 && fail === 0) {
+    toast(tr('photo.uploadSkip') || 'Format de fichier non reconnu.', 'err');
+  } else if (fail > 0 && ok === 0) {
+    toast(tr('photo.uploadFail') || 'Aucune photo n’a pu être envoyée.', 'err');
+  }
 }
 
 async function removePhoto(tab, i) {

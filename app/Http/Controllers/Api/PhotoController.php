@@ -8,11 +8,15 @@ use App\Models\Photo;
 use App\Support\PhotoStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PhotoController extends Controller
 {
     use ResolvesProject;
+
+    /** @var list<string> */
+    private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 
     public function index(Request $request)
     {
@@ -60,23 +64,56 @@ class PhotoController extends Controller
     public function store(Request $request)
     {
         $project = $this->resolveProject($request);
+        $maxKb = (int) config('gda.photo_max_upload_kb', 65536);
+
+        if (! $request->hasFile('photo')) {
+            throw ValidationException::withMessages([
+                'photo' => [
+                    'Aucun fichier reçu par Laravel. Vérifiez que le fichier ne dépasse pas '
+                    .(int) floor($maxKb / 1024).' Mo (limite application).',
+                ],
+            ]);
+        }
+
+        $file = $request->file('photo');
+
+        if (! $file->isValid()) {
+            throw ValidationException::withMessages([
+                'photo' => [$file->getErrorMessage() ?: 'Erreur PHP lors de la réception du fichier.'],
+            ]);
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (! in_array($ext, self::ALLOWED_EXTENSIONS, true)) {
+            throw ValidationException::withMessages([
+                'photo' => ['Format non supporté. Utilisez JPG, PNG, GIF ou WebP.'],
+            ]);
+        }
 
         $data = $request->validate([
-            'photo' => ['required', 'file', 'image', 'max:20480'],
+            'photo' => ['required', 'file', 'max:'.$maxKb],
             'category' => ['required', 'in:avant,pendant,apres,securite,qualite'],
             'caption' => ['nullable', 'string', 'max:500'],
             'taken_at' => ['nullable', 'date'],
+        ], [
+            'photo.max' => 'La photo dépasse '.(int) floor($maxKb / 1024).' Mo (limite Laravel / GDA_PHOTO_MAX_KB).',
         ]);
 
         PhotoStorage::ensurePublicRoot();
-        Storage::disk('public')->makeDirectory('photos/'.$data['category']);
 
-        $file = $request->file('photo');
-        $path = $file->store('photos/'.$data['category'], 'public');
+        try {
+            $path = PhotoStorage::storeUploaded($file, $data['category']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Erreur lors du traitement de l\'image : '.$e->getMessage(),
+            ], 500);
+        }
 
         if (! $path || ! Storage::disk('public')->exists($path)) {
             return response()->json([
-                'message' => 'Impossible d\'enregistrer le fichier sur le serveur. Vérifiez les droits du dossier storage.',
+                'message' => 'Impossible d\'enregistrer le fichier sur le serveur. Vérifiez les droits du dossier storage/app/public.',
             ], 500);
         }
 
@@ -88,7 +125,7 @@ class PhotoController extends Controller
             'original_name' => $file->getClientOriginalName(),
             'caption' => $data['caption'] ?? null,
             'taken_at' => $data['taken_at'] ?? null,
-            'file_size' => $file->getSize(),
+            'file_size' => Storage::disk('public')->size($path),
         ]);
 
         return response()->json([
