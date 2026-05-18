@@ -348,7 +348,11 @@ async function apiFetch(path, options = {}) {
       } else if (j.message) {
         msg = j.message;
       }
-    } catch (_) {}
+    } catch (_) {
+      if (res.status === 419) msg = 'Session expirée — reconnectez-vous.';
+      else if (res.status === 413) msg = 'Fichier trop volumineux (limite serveur web).';
+      else if (res.status === 403) msg = 'Accès refusé.';
+    }
     throw new Error(msg);
   }
   const ct = res.headers.get('content-type');
@@ -1672,19 +1676,9 @@ function compressImageFile(file, maxEdge = 2560, quality = 0.88) {
   });
 }
 
-/** Compression navigateur uniquement pour les très gros fichiers (> 12 Mo). */
+/** Envoie le fichier original — pas de compression navigateur (évite les échecs sur 6000×4000, etc.). */
 async function preparePhotoForUpload(file) {
-  const maxBytes = 12 * 1024 * 1024;
-  const maxEdge = 4096;
-  if (file.size <= maxBytes) {
-    try {
-      const dims = await readImageDimensions(file);
-      if (dims && Math.max(dims.w, dims.h) <= maxEdge) return file;
-    } catch (_) {
-      return file;
-    }
-  }
-  return compressImageFile(file, maxEdge, 0.9);
+  return file;
 }
 
 function formatPhotoUploadError(message, file) {
@@ -1703,28 +1697,23 @@ async function addPhotos(tab, files) {
   let ok = 0;
   let fail = 0;
   let skip = 0;
+  let lastErr = '';
   for (const file of Array.from(files)) {
     if (!isLikelyImageFile(file)) {
       skip++;
-      continue;
-    }
-    let uploadFile = file;
-    try {
-      uploadFile = await preparePhotoForUpload(file);
-    } catch (e) {
-      fail++;
-      toast((file.name || 'Image') + ' — ' + (e.message || tr('photo.compressErr')), 'err');
+      lastErr = tr('photo.uploadSkip') || 'Format non reconnu';
       continue;
     }
     const fd = new FormData();
-    fd.append('photo', uploadFile);
+    fd.append('photo', file, file.name || 'photo.jpg');
     fd.append('category', tab);
     try {
       await apiFetch('/photos', { method: 'POST', body: fd });
       ok++;
     } catch (e) {
       fail++;
-      toast((file.name || 'Image') + ' — ' + formatPhotoUploadError(e.message, file), 'err');
+      lastErr = formatPhotoUploadError(e.message, file);
+      toast((file.name || 'Image') + ' — ' + lastErr, 'err');
     }
   }
   await loadPhotosCategory(tab);
@@ -1734,9 +1723,9 @@ async function addPhotos(tab, files) {
   } else if (ok > 0) {
     toast(trTpl('photo.uploadPartial', { ok, fail, skip }) || `${ok} photo(s) envoyée(s).`, fail > 0 ? 'err' : 'ok');
   } else if (skip > 0 && fail === 0) {
-    toast(tr('photo.uploadSkip') || 'Format de fichier non reconnu.', 'err');
+    toast(lastErr || tr('photo.uploadSkip') || 'Format de fichier non reconnu.', 'err');
   } else if (fail > 0 && ok === 0) {
-    toast(tr('photo.uploadFail') || 'Aucune photo n’a pu être envoyée.', 'err');
+    toast(lastErr || tr('photo.uploadFail') || 'Aucune photo n’a pu être envoyée.', 'err');
   }
 }
 

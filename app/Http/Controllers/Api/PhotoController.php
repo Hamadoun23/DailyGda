@@ -83,10 +83,19 @@ class PhotoController extends Controller
             ]);
         }
 
-        $ext = strtolower($file->getClientOriginalExtension());
+        $ext = strtolower($file->getClientOriginalExtension() ?: '');
+        if ($ext === '' && $file->getMimeType()) {
+            $ext = match ($file->getMimeType()) {
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/gif' => 'gif',
+                'image/webp' => 'webp',
+                default => '',
+            };
+        }
         if (! in_array($ext, self::ALLOWED_EXTENSIONS, true)) {
             throw ValidationException::withMessages([
-                'photo' => ['Format non supporté. Utilisez JPG, PNG, GIF ou WebP.'],
+                'photo' => ['Format non supporté ('.($file->getClientOriginalName() ?: 'fichier').'). Utilisez JPG, PNG, GIF ou WebP.'],
             ]);
         }
 
