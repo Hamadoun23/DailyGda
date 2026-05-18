@@ -679,6 +679,7 @@ function refreshSidebar() {
 }
 
 function goTo(page) {
+  if (typeof closeSidebar === 'function') closeSidebar();
   if (window.GDA_IS_PARTNER && (page === 'daily' || page === 'photos')) {
     toast('Cette section n’est pas accessible pour votre profil.', 'err');
     return;

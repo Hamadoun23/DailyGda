@@ -1,5 +1,9 @@
 ﻿@extends('layouts.gda')
 
+@push('body-class')
+has-sidebar
+@endpush
+
 @section('title', 'GDA — Chantier')
 
 @section('content')

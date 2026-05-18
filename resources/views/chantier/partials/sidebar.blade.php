@@ -1,5 +1,6 @@
-﻿<!-- ===== SIDEBAR ===== -->
-<nav class="sidebar">
+﻿<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true" onclick="closeSidebar()"></div>
+<!-- ===== SIDEBAR ===== -->
+<nav class="sidebar" id="app-sidebar">
   <div class="sidebar-section" data-i18n="sidebar.section">Navigation</div>
   <div class="nav-item active" onclick="goTo('dashboard')"><span class="nav-icon">◈</span> <span data-i18n="sidebar.dashboard">Tableau de bord</span></div>
   <div class="sidebar-project-switch">

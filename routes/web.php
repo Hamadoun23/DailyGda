@@ -8,6 +8,12 @@ Route::get('/fichiers/{path}', [PublicMediaController::class, 'show'])
     ->where('path', '.*')
     ->name('gda.public-file');
 
+Route::get('/manifest.webmanifest', function () {
+    return response()
+        ->view('pwa.manifest')
+        ->header('Content-Type', 'application/manifest+json');
+})->name('pwa.manifest');
+
 Route::redirect('/chantier', '/', 302);
 
 Route::get('/', function () {

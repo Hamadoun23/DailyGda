@@ -5,6 +5,11 @@
 @endphp
 <!-- ===== HEADER ===== -->
 <header class="header">
+  <button type="button" class="header-menu-btn" id="header-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="app-sidebar" onclick="toggleSidebar()">
+    <span class="header-menu-btn__bar"></span>
+    <span class="header-menu-btn__bar"></span>
+    <span class="header-menu-btn__bar"></span>
+  </button>
   <a href="{{ route('home') }}" class="logo">
     <img src="{{ asset('img/GDACONST.png') }}?v={{ $gdaAssetVer ?? 1 }}" alt="GDA" class="brand-logo brand-logo--header">
   </a>

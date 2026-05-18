@@ -1,5 +1,6 @@
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true" onclick="closeSidebar()"></div>
 <!-- ===== SIDEBAR PARTENAIRE (lecture : tableau de bord, tâches, rapport) ===== -->
-<nav class="sidebar">
+<nav class="sidebar" id="app-sidebar">
   <div class="sidebar-section" data-i18n="partner.section">Espace partenaire</div>
   <div class="nav-item active" onclick="goTo('dashboard')"><span class="nav-icon">◈</span> <span data-i18n="sidebar.dashboard">Tableau de bord</span></div>
   <div class="nav-item" onclick="goTo('tasks')"><span class="nav-icon">≡</span> <span data-i18n="sidebar.tasks">Toutes les tâches</span></div>
