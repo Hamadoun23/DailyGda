@@ -6,7 +6,14 @@
     window.addEventListener('load', function () {
       var swUrl = window.GDA_SW_URL || '/sw.js';
       var scope = swUrl.replace(/\/sw\.js(\?.*)?$/, '/') || '/';
-      navigator.serviceWorker.register(swUrl, { scope: scope }).catch(function () {});
+      navigator.serviceWorker
+        .register(swUrl, { scope: scope, updateViaCache: 'none' })
+        .then(function (reg) {
+          return reg.update().then(function () {
+            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          });
+        })
+        .catch(function () {});
     });
   }
 
