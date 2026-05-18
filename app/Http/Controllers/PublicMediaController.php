@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PhotoStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -22,14 +23,7 @@ class PublicMediaController extends Controller
         }
 
         $absolute = Storage::disk('public')->path($path);
-        $mime = match (strtolower(pathinfo($absolute, PATHINFO_EXTENSION))) {
-            'png' => 'image/png',
-            'gif' => 'image/gif',
-            'webp' => 'image/webp',
-            'svg' => 'image/svg+xml',
-            'jpg', 'jpeg' => 'image/jpeg',
-            default => mime_content_type($absolute) ?: 'application/octet-stream',
-        };
+        $mime = PhotoStorage::mimeForPath($absolute);
 
         return response()->file($absolute, [
             'Content-Type' => $mime,

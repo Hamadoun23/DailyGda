@@ -40,12 +40,11 @@ class Photo extends Model
 
     public function getUrlAttribute(): string
     {
-        if (! $this->path) {
+        if (! $this->id) {
             return '';
         }
 
-        $path = str_replace('\\', '/', $this->path);
-
-        return route('gda.public-file', ['path' => $path], absolute: true);
+        // Chemin relatif : le front le résout via GDA_API_BASE (fiable en prod / sous-dossier).
+        return '/api/photos/'.$this->id.'/file';
     }
 }

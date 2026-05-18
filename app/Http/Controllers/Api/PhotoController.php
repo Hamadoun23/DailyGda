@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Concerns\ResolvesProject;
 use App\Http\Controllers\Controller;
 use App\Models\Photo;
+use App\Support\PhotoStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PhotoController extends Controller
 {
@@ -29,6 +31,7 @@ class PhotoController extends Controller
         $photos = $query->get()->map(fn (Photo $p) => [
             'id' => $p->id,
             'url' => $p->url,
+            'path' => str_replace('\\', '/', (string) $p->path),
             'category' => $p->category,
             'caption' => $p->caption,
             'taken_at' => $p->taken_at?->toDateString(),
@@ -38,6 +41,20 @@ class PhotoController extends Controller
         ]);
 
         return response()->json(['photos' => $photos]);
+    }
+
+    public function file(Request $request, Photo $photo): BinaryFileResponse
+    {
+        $project = $this->resolveProject($request);
+        abort_unless((int) $photo->project_id === (int) $project->id, 404);
+
+        $absolute = PhotoStorage::absolutePath($photo);
+        abort_unless($absolute !== null && is_file($absolute), 404);
+
+        return response()->file($absolute, [
+            'Content-Type' => PhotoStorage::mimeForPath($absolute),
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
     }
 
     public function store(Request $request)
@@ -51,8 +68,17 @@ class PhotoController extends Controller
             'taken_at' => ['nullable', 'date'],
         ]);
 
+        PhotoStorage::ensurePublicRoot();
+        Storage::disk('public')->makeDirectory('photos/'.$data['category']);
+
         $file = $request->file('photo');
         $path = $file->store('photos/'.$data['category'], 'public');
+
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'message' => 'Impossible d\'enregistrer le fichier sur le serveur. Vérifiez les droits du dossier storage.',
+            ], 500);
+        }
 
         $photo = Photo::create([
             'project_id' => $project->id,
@@ -68,6 +94,7 @@ class PhotoController extends Controller
         return response()->json([
             'id' => $photo->id,
             'url' => $photo->url,
+            'path' => str_replace('\\', '/', (string) $photo->path),
             'category' => $photo->category,
             'taken_at' => $photo->taken_at?->toDateString(),
         ], 201);

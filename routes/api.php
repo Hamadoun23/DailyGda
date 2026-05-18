@@ -55,6 +55,7 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::get('/photos', [PhotoController::class, 'index']);
     Route::post('/photos', [PhotoController::class, 'store']);
+    Route::get('/photos/{photo}/file', [PhotoController::class, 'file'])->whereNumber('photo');
     Route::delete('/photos/{photo}', [PhotoController::class, 'destroy']);
 
     Route::get('/reports', [ReportController::class, 'index']);

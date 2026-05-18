@@ -41,6 +41,12 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
+        try {
+            \App\Support\PhotoStorage::ensurePublicRoot();
+        } catch (\Throwable) {
+            // Droits storage à corriger sur l'hébergeur.
+        }
+
         $authListener = LogAuthActivity::class;
         Event::listen(Login::class, [$authListener, 'handleLogin']);
         Event::listen(Logout::class, [$authListener, 'handleLogout']);

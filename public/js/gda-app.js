@@ -1448,9 +1448,62 @@ async function loadPhotosCategory(tab) {
   const data = await apiFetch('/photos?category=' + encodeURIComponent(tab));
   photoStore[tab] = (data.photos || []).map(p => ({
     id: p.id,
-    src: p.url,
+    path: p.path || '',
+    src: photoFileUrl(p.id, p.url),
     date: p.taken_at ? new Date(p.taken_at).toLocaleDateString(gdaDateLocale()) : new Date(p.created_at).toLocaleDateString(gdaDateLocale()),
   }));
+}
+
+function gdaApiRoot() {
+  return (window.GDA_API_BASE || (window.location.origin + '/api')).replace(/\/$/, '');
+}
+
+function gdaAppRoot() {
+  return (window.GDA_APP_URL || window.location.origin).replace(/\/$/, '');
+}
+
+/** URL d'affichage photo — construite côté navigateur (fiable en prod / sous-dossier). */
+function photoFileUrl(photoId, legacyUrl) {
+  if (photoId) {
+    return gdaApiRoot() + '/photos/' + photoId + '/file';
+  }
+  return normalizePhotoSrc(legacyUrl || '');
+}
+
+function photoPublicFallbackUrl(storagePath) {
+  if (!storagePath) return '';
+  const encoded = String(storagePath)
+    .replace(/^\//, '')
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/');
+  return gdaAppRoot() + '/fichiers/' + encoded;
+}
+
+function normalizePhotoSrc(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname !== window.location.hostname) {
+        url = parsed.pathname + parsed.search;
+      } else {
+        return url;
+      }
+    } catch (_) {
+      return url;
+    }
+  }
+  if (url.startsWith('/api/')) {
+    return gdaAppRoot() + url;
+  }
+  if (url.startsWith('/fichiers/')) {
+    return gdaAppRoot() + url;
+  }
+  if (url.startsWith('/')) {
+    return gdaAppRoot() + url;
+  }
+  return url;
 }
 
 async function loadAllPhotoCategories() {
@@ -1525,9 +1578,14 @@ function renderPhotos() {
 }
 
 function photoThumb(p, i, tab, categoryLabel) {
+  const src = escapeHtmlAttr(p.src);
+  const fallback = p.path ? escapeHtmlAttr(photoPublicFallbackUrl(p.path)) : '';
+  const onerr = fallback
+    ? ` onerror="if(this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}" data-fallback="${fallback}"`
+    : '';
   return `<article class="photo-item" onclick="openLB('${tab}',${i})">
     <div class="photo-frame">
-      <img src="${p.src.replace(/"/g, '&quot;')}" alt="">
+      <img src="${src}" alt="" loading="lazy"${onerr}>
     <div class="photo-date-badge">${escapeHtml(p.date)}</div>
       <div class="photo-overlay">
         <span class="photo-zoom-hint">${escapeHtml(tr('photo.zoom'))}</span>
