@@ -20,8 +20,8 @@
   window.GDA_AUTH_REQUIRED = true;
   window.GDA_IS_PARTNER = true;
 </script>
-<script src="{{ asset('js/report-structure-en.js') }}"></script>
-<script src="{{ asset('js/gda-i18n.js') }}"></script>
+<script src="{{ asset('js/report-structure-en.js') }}?v={{ $gdaAssetVer ?? 1 }}"></script>
+<script src="{{ asset('js/gda-i18n.js') }}?v={{ $gdaAssetVer ?? 1 }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-<script src="{{ asset('js/gda-app.js') }}"></script>
+<script src="{{ asset('js/gda-app.js') }}?v={{ $gdaAssetVer ?? 1 }}"></script>
 @endpush

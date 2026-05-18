@@ -40,6 +40,12 @@ class Photo extends Model
 
     public function getUrlAttribute(): string
     {
-        return asset('storage/'.str_replace('\\', '/', $this->path));
+        if (! $this->path) {
+            return '';
+        }
+
+        $path = str_replace('\\', '/', $this->path);
+
+        return route('gda.public-file', ['path' => $path], absolute: true);
     }
 }

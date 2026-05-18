@@ -6,7 +6,7 @@
 <!-- ===== HEADER ===== -->
 <header class="header">
   <a href="{{ route('home') }}" class="logo">
-    <img src="{{ asset('img/GDACONST.png') }}" alt="GDA" class="brand-logo brand-logo--header">
+    <img src="{{ asset('img/GDACONST.png') }}?v={{ $gdaAssetVer ?? 1 }}" alt="GDA" class="brand-logo brand-logo--header">
   </a>
   <div class="header-sep"></div>
   @if ($activeNav === 'chantier')

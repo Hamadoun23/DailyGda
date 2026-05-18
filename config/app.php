@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Asset URL (production / sous-dossier)
+    |--------------------------------------------------------------------------
+    |
+    | Si l'application est servie depuis un sous-chemin (ex. /dailygda/public),
+    | définir ASSET_URL sur la même base que les fichiers publics (css, img).
+    |
+    */
+
+    'asset_url' => env('ASSET_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

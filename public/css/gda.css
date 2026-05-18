@@ -1173,7 +1173,7 @@ input[type=range]::-webkit-slider-thumb {
 }
 #login-screen.login-screen--bg-img {
   background-color: var(--bg);
-  background-image: url('../img/Bgconst.jpeg');
+  /* Image de fond définie en inline (asset()) dans login-card.blade.php pour la prod */
   background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;

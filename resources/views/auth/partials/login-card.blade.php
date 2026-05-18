@@ -1,11 +1,11 @@
 {{-- Bloc visuel identique à la page connexion GDA (réutilisable) --}}
-<div id="login-screen" class="login-screen--bg-img">
+<div id="login-screen" class="login-screen--bg-img" style="background-image:url('{{ asset('img/Bgconst.jpeg') }}')">
   <div class="login-box">
     @if (session('status'))
       <div class="login-flash login-flash--ok">{{ session('status') }}</div>
     @endif
 
-    <img src="{{ asset('img/logoconst.png') }}" alt="GDA" class="brand-logo brand-logo--login brand-logo--login-only">
+    <img src="{{ asset('img/logoconst.png') }}?v={{ $gdaAssetVer ?? 1 }}" alt="GDA" class="brand-logo brand-logo--login brand-logo--login-only">
     <div class="login-sub">BuildOps Management</div>
 
     <form method="POST" action="{{ route('login') }}" class="login-form" autocomplete="off">
