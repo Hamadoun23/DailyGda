@@ -15,7 +15,7 @@ final class PhotoStorage
     }
 
     /**
-     * Enregistre le fichier tel quel. Aucune recompression pour les photos < 8 Mo (ex. 58.jpg ~2,3 Mo).
+     * Enregistre le fichier tel quel.
      */
     public static function storeUploaded(UploadedFile $file, string $category): string
     {
@@ -23,6 +23,38 @@ final class PhotoStorage
         Storage::disk('public')->makeDirectory($directory);
 
         return (string) $file->store($directory, 'public');
+    }
+
+    /**
+     * Contournement hébergement : upload JSON base64 quand $_FILES est vide (multipart bloqué).
+     */
+    public static function storeFromBase64(string $base64, string $filename, string $category): string
+    {
+        $base64 = preg_replace('#^data:image/[^;]+;base64,#i', '', trim($base64));
+        $base64 = str_replace(["\r", "\n", ' '], '', $base64);
+
+        $bytes = base64_decode($base64, true);
+        if ($bytes === false || strlen($bytes) < 100) {
+            throw new \InvalidArgumentException('Données image invalides (base64).');
+        }
+
+        $maxBytes = (int) config('gda.photo_max_upload_kb', 65536) * 1024;
+        if (strlen($bytes) > $maxBytes) {
+            throw new \InvalidArgumentException('Image trop volumineuse (max '.(int) floor($maxBytes / 1024 / 1024).' Mo).');
+        }
+
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'jpg');
+        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            $ext = 'jpg';
+        }
+
+        $directory = 'photos/'.$category;
+        Storage::disk('public')->makeDirectory($directory);
+
+        $relative = $directory.'/'.Str::uuid()->toString().'.'.$ext;
+        Storage::disk('public')->put($relative, $bytes);
+
+        return $relative;
     }
 
     public static function absolutePath(Photo $photo): ?string

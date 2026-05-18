@@ -23,4 +23,7 @@ return [
 
     'photo_jpeg_target_bytes' => (int) env('GDA_PHOTO_JPEG_TARGET_BYTES', 5 * 1024 * 1024),
 
+  /** Taille max chaîne base64 (caractères) pour l’upload JSON. */
+    'photo_max_base64_chars' => (int) env('GDA_PHOTO_MAX_BASE64_CHARS', 28_000_000),
+
 ];

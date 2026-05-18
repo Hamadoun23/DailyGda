@@ -1684,12 +1684,43 @@ async function preparePhotoForUpload(file) {
 function formatPhotoUploadError(message, file) {
   const msg = String(message || '');
   if (/too large|trop volumineux|20\s*mo|upload_max|post_max|413/i.test(msg)) {
-    return tr('photo.tooLarge') || 'Fichier trop lourd pour le serveur (souvent max 2 Mo). Réessayez : l’image sera compressée automatiquement.';
+    return tr('photo.tooLarge') || 'Fichier trop lourd pour le serveur.';
   }
   if (/mimes|format|image/i.test(msg) && /non support/i.test(msg)) {
     return tr('photo.badFormat') || 'Format non supporté (JPG, PNG, GIF, WebP).';
   }
   return msg || tr('common.error') || 'Erreur';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error(tr('photo.invalidImg') || 'Image illisible'));
+        return;
+      }
+      const i = result.indexOf(',');
+      resolve(i >= 0 ? result.slice(i + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error(tr('photo.invalidImg') || 'Image illisible'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Envoi JSON base64 — contourne $_FILES vide sur certains hébergeurs cPanel. */
+async function uploadPhotoFile(tab, file) {
+  const name = file.name || 'photo.jpg';
+  const b64 = await fileToBase64(file);
+  return apiFetch('/photos', {
+    method: 'POST',
+    body: JSON.stringify({
+      category: tab,
+      photo_base64: b64,
+      photo_name: name,
+    }),
+  });
 }
 
 async function addPhotos(tab, files) {
@@ -1704,11 +1735,8 @@ async function addPhotos(tab, files) {
       lastErr = tr('photo.uploadSkip') || 'Format non reconnu';
       continue;
     }
-    const fd = new FormData();
-    fd.append('photo', file, file.name || 'photo.jpg');
-    fd.append('category', tab);
     try {
-      await apiFetch('/photos', { method: 'POST', body: fd });
+      await uploadPhotoFile(tab, file);
       ok++;
     } catch (e) {
       fail++;

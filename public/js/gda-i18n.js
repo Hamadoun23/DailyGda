@@ -176,7 +176,7 @@ const GDA_I18N = {
     'photo.heroEyebrow': 'Documentation visuelle',
     'photo.dzBold': 'Cliquez ici',
     'photo.dzMid': 'ou glissez vos photos dans',
-    'photo.dzFmt': 'JPG, PNG · max 64 Mo · compression auto au-delà de 8 Mo',
+    'photo.dzFmt': 'JPG, PNG · max 64 Mo',
     'photo.uploadOk': 'Photo(s) envoyée(s)',
     'photo.uploadPartial': '{ok} photo(s) envoyée(s).',
     'photo.uploadFail': 'Aucune photo n’a pu être envoyée.',
