@@ -12,9 +12,9 @@ final class WeatherService
      */
     public function currentForNav(?float $lat = null, ?float $lon = null, string $lang = 'fr'): array
     {
-        $key = (string) config('services.openweather.key', '');
+        $key = trim((string) config('services.openweather.key', ''));
         if ($key === '') {
-            return ['ok' => false, 'message' => 'Clé météo non configurée'];
+            return ['ok' => false, 'message' => 'Clé météo non configurée', 'code' => 'missing_api_key'];
         }
 
         $lat = $lat ?? (float) config('gda.weather_default_lat', 12.6392);
@@ -56,7 +56,13 @@ final class WeatherService
         }
 
         if (! $response->successful()) {
-            return ['ok' => false, 'message' => 'Météo indisponible'];
+            $status = $response->status();
+
+            return [
+                'ok' => false,
+                'message' => 'Météo indisponible',
+                'code' => $status === 401 ? 'invalid_api_key' : 'api_error',
+            ];
         }
 
         $data = $response->json();

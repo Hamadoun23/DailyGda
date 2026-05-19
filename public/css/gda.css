@@ -332,6 +332,11 @@ body {
   object-fit: contain;
   flex-shrink: 0;
 }
+.header-weather__emoji {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
 .header-weather__temp {
   font-weight: 700;
   font-size: 15px;

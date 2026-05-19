@@ -648,27 +648,65 @@ function initNavWeather() {
   weatherTimer = setInterval(run, 12 * 60 * 1000);
 }
 
+function weatherIconEmoji(iconCode) {
+  const map = {
+    '01d': '☀️',
+    '01n': '🌙',
+    '02d': '🌤️',
+    '02n': '☁️',
+    '03d': '☁️',
+    '03n': '☁️',
+    '04d': '☁️',
+    '04n': '☁️',
+    '09d': '🌧️',
+    '09n': '🌧️',
+    '10d': '🌦️',
+    '10n': '🌧️',
+    '11d': '⛈️',
+    '11n': '⛈️',
+    '13d': '❄️',
+    '13n': '❄️',
+    '50d': '🌫️',
+    '50n': '🌫️',
+  };
+  return map[iconCode] || '🌡️';
+}
+
 async function refreshNavWeather() {
   const el = document.getElementById('header-weather');
   if (!el) return;
 
-  let url = '/weather/nav';
+  let url = API_BASE + '/weather/nav';
   if (weatherCoords) {
     url += `?lat=${encodeURIComponent(weatherCoords.lat)}&lon=${encodeURIComponent(weatherCoords.lon)}`;
   }
 
   try {
-    const data = await apiFetch(url);
-    if (!data.ok) return;
+    const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    if (typeof gdaUiLang === 'function') headers['X-GDA-Ui-Lang'] = gdaUiLang();
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) headers.Authorization = 'Bearer ' + token;
+
+    const res = await fetch(url, { headers, credentials: 'include' });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (!data.ok) {
+      if (data.code === 'missing_api_key' || data.code === 'invalid_api_key') {
+        console.warn('[GDA météo]', data.message || data.code);
+      }
+      return;
+    }
 
     const city = data.city ? escapeHtml(data.city) : '';
     const desc = data.description ? escapeHtml(data.description) : '';
     const temp = data.temp != null ? `${data.temp}°C` : '';
-    const iconUrl = data.icon_url ? escapeHtmlAttr(data.icon_url) : '';
+    const emoji = weatherIconEmoji(data.icon);
 
     el.innerHTML = `
       <span class="header-weather__sep" aria-hidden="true"></span>
-      ${iconUrl ? `<img class="header-weather__icon" src="${iconUrl}" alt="" width="32" height="32">` : ''}
+      <span class="header-weather__emoji" aria-hidden="true">${emoji}</span>
       <span class="header-weather__temp">${temp}</span>
       ${city ? `<span class="header-weather__city" title="${desc}">${city}</span>` : ''}
     `;

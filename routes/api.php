@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
+/** Météo nav — public (clé OpenWeather côté serveur uniquement). */
+Route::get('/weather/nav', [WeatherController::class, 'nav']);
+
 Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (): void {
     Route::get('/whoami', [AuthController::class, 'whoami']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -36,8 +39,6 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
-
-    Route::get('/weather/nav', [WeatherController::class, 'nav']);
 
     Route::get('/project', [ProjectController::class, 'show']);
     Route::get('/dashboard/export', [DashboardController::class, 'export']);
