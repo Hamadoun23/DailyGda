@@ -630,19 +630,19 @@ function initNavWeather() {
   if (weatherTimer) clearInterval(weatherTimer);
 
   const run = () => void refreshNavWeather();
-  if (weatherCoords) {
-    run();
-  } else if (navigator.geolocation) {
+
+  // Affichage immédiat (coords serveur / Bamako) — ne pas attendre la géolocalisation
+  run();
+
+  if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => {
         weatherCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         run();
       },
-      () => run(),
+      () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
     );
-  } else {
-    run();
   }
 
   weatherTimer = setInterval(run, 12 * 60 * 1000);

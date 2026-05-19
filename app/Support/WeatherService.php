@@ -24,7 +24,26 @@ final class WeatherService
 
         $cacheKey = sprintf('gda_weather_nav_%s_%s_%s', round($lat, 2), round($lon, 2), $lang);
 
-        return Cache::remember($cacheKey, now()->addMinutes(12), function () use ($lat, $lon, $key, $lang) {
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && ($cached['ok'] ?? false)) {
+            return $cached;
+        }
+
+        $result = $this->fetchFromOpenWeather($lat, $lon, $key, $lang);
+
+        if ($result['ok'] ?? false) {
+            Cache::put($cacheKey, $result, now()->addMinutes(12));
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{ok: bool, temp?: int|float, description?: string, icon?: string, city?: string, icon_url?: string, message?: string}
+     */
+    private function fetchFromOpenWeather(float $lat, float $lon, string $key, string $lang): array
+    {
+        try {
             $response = Http::timeout(10)->get('https://api.openweathermap.org/data/2.5/weather', [
                 'lat' => $lat,
                 'lon' => $lon,
@@ -32,22 +51,24 @@ final class WeatherService
                 'units' => 'metric',
                 'lang' => $lang === 'en' ? 'en' : 'fr',
             ]);
+        } catch (\Throwable) {
+            return ['ok' => false, 'message' => 'Météo indisponible'];
+        }
 
-            if (! $response->successful()) {
-                return ['ok' => false, 'message' => 'Météo indisponible'];
-            }
+        if (! $response->successful()) {
+            return ['ok' => false, 'message' => 'Météo indisponible'];
+        }
 
-            $data = $response->json();
-            $icon = (string) ($data['weather'][0]['icon'] ?? '01d');
+        $data = $response->json();
+        $icon = (string) ($data['weather'][0]['icon'] ?? '01d');
 
-            return [
-                'ok' => true,
-                'temp' => (int) round((float) ($data['main']['temp'] ?? 0)),
-                'description' => ucfirst((string) ($data['weather'][0]['description'] ?? '')),
-                'icon' => $icon,
-                'icon_url' => 'https://openweathermap.org/img/wn/'.$icon.'@2x.png',
-                'city' => (string) ($data['name'] ?? ''),
-            ];
-        });
+        return [
+            'ok' => true,
+            'temp' => (int) round((float) ($data['main']['temp'] ?? 0)),
+            'description' => ucfirst((string) ($data['weather'][0]['description'] ?? '')),
+            'icon' => $icon,
+            'icon_url' => 'https://openweathermap.org/img/wn/'.$icon.'@2x.png',
+            'city' => (string) ($data['name'] ?? ''),
+        ];
     }
 }
