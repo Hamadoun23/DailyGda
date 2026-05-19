@@ -1,7 +1,5 @@
 @php
     $activeNav = $activeNav ?? 'chantier';
-    $hideProjectsNav = $hideProjectsNav ?? false;
-    $hideChantierNav = $hideChantierNav ?? false;
 @endphp
 <!-- ===== HEADER ===== -->
 <header class="header">
@@ -20,18 +18,11 @@
     <div class="project-label" data-i18n="header.projectsMgmt">Gestion des projets</div>
   @endif
   <div class="header-spacer"></div>
-  @if (! $hideChantierNav || ! $hideProjectsNav)
-  <nav class="header-nav" aria-label="Navigation principale">
-    @unless ($hideChantierNav)
-    <a href="{{ route('home') }}" class="header-nav-link {{ $activeNav === 'chantier' ? 'is-active' : '' }}" data-i18n="header.chantier">Chantier</a>
-    @endunless
-    @unless ($hideProjectsNav)
-    <a href="{{ route('projects') }}" class="header-nav-link {{ $activeNav === 'projets' ? 'is-active' : '' }}" data-i18n="header.projects">Projets</a>
-    @endunless
-  </nav>
-  @endif
   @if ($activeNav === 'chantier')
-    <div class="date-live" id="date-live"></div>
+    <div class="header-datetime" aria-label="Date et météo">
+      <div class="date-live" id="date-live"></div>
+      <div class="header-weather" id="header-weather" hidden aria-live="polite"></div>
+    </div>
     <div style="width:12px"></div>
   @endif
   @if ($activeNav === 'chantier' || $activeNav === 'projets')

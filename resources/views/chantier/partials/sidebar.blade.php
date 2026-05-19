@@ -14,6 +14,14 @@
   <div class="nav-item" onclick="goTo('photos')"><span class="nav-icon">◉</span> <span data-i18n="sidebar.photos">Galerie photos</span></div>
   <div class="nav-item" onclick="goTo('report')"><span class="nav-icon">◻</span> <span data-i18n="sidebar.report">Rapport PDF</span></div>
   <div class="nav-item" data-admin-only style="display:none" onclick="goTo('logs')"><span class="nav-icon">◎</span> <span data-i18n="sidebar.logs">Journal d'activité</span></div>
+  <a href="{{ route('home') }}" class="nav-item nav-item--link">
+    <span class="nav-icon">⌂</span>
+    <span data-i18n="header.chantier">Chantier</span>
+  </a>
+  <a href="{{ route('projects') }}" class="nav-item nav-item--link" data-admin-only style="display:none">
+    <span class="nav-icon">▣</span>
+    <span data-i18n="header.projects">Projets</span>
+  </a>
 
   <div style="padding:16px 16px 0">
     <div class="sidebar-progress">

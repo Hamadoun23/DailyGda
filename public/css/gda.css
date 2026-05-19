@@ -18,7 +18,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  --head-bar-h: 84px;
+  --head-bar-h: 100px;
   --head-h: calc(var(--head-bar-h) + var(--safe-top));
   --sidebar-w:260px;
 }
@@ -66,8 +66,8 @@ body {
 }
 
 .brand-logo--header {
-  height: 76px;
-  max-width: 360px;
+  height: 94px;
+  max-width: 440px;
 }
 
 .brand-logo--login {
@@ -90,9 +90,15 @@ body {
 .project-label {
   color: #fff8;
   font-size: 12px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   text-transform: uppercase;
-  flex-shrink:0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(240px, 22vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .sidebar-project-switch {
@@ -289,12 +295,60 @@ body {
   background: rgba(200, 82, 26, 0.1);
 }
 
-/* Date live */
+/* Date live + météo nav */
+.header-datetime {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
 .date-live {
   color: #fff6;
   font-size: 12px;
   letter-spacing: 1px;
   font-family: 'Barlow Condensed', sans-serif;
+  white-space: nowrap;
+}
+.header-weather {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-family: 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.header-weather[hidden] {
+  display: none !important;
+}
+.header-weather__icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.header-weather__temp {
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+}
+.header-weather__city {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-weather__sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 2px;
 }
 
 /* ===== SIDEBAR ===== */
@@ -317,6 +371,11 @@ body {
   letter-spacing: 3px;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+a.nav-item--link {
+  text-decoration: none;
+  color: inherit;
 }
 
 .nav-item {
@@ -1670,9 +1729,6 @@ input[type=range]::-webkit-slider-thumb {
   background: #fff;
   border-radius: 1px;
 }
-body.has-sidebar .header-menu-btn {
-  display: flex;
-}
 .sidebar-backdrop {
   display: none;
   position: fixed;
@@ -1690,10 +1746,22 @@ body.sidebar-open {
 }
 
 /* ===== RESPONSIVE ===== */
+@media (max-width: 1200px) {
+  .project-label {
+    max-width: min(160px, 18vw);
+  }
+}
+
 @media (max-width: 1100px) {
   .header-nav-link { padding: 8px 8px; font-size: 11px; }
   .date-live { display: none; }
   .header-lang__lbl { display: none; }
+  .header-weather__city,
+  .header-weather__sep { display: none; }
+  .header-weather__icon { width: 26px; height: 26px; }
+  .project-label {
+    max-width: min(120px, 28vw);
+  }
 }
 
 /* PWA installée : barre d’outils plus compacte sous l’encoche */
@@ -1711,6 +1779,10 @@ body.sidebar-open {
   :root {
     --head-bar-h: 58px;
     --sidebar-w: min(300px, 88vw);
+  }
+
+  body.has-sidebar .header-menu-btn {
+    display: flex;
   }
 
   .header {

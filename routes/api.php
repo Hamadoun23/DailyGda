@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SubPhaseController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\WeatherController;
 use App\Http\Middleware\RestrictPartnerApi;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,8 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+    Route::get('/weather/nav', [WeatherController::class, 'nav']);
 
     Route::get('/project', [ProjectController::class, 'show']);
     Route::get('/dashboard/export', [DashboardController::class, 'export']);

@@ -7,7 +7,7 @@ has-sidebar
 @section('title', 'GDA — Espace partenaire')
 
 @section('content')
-@include('partials.gda-header', ['activeNav' => 'chantier', 'hideProjectsNav' => true, 'hideChantierNav' => true])
+@include('partials.gda-header', ['activeNav' => 'chantier'])
 @include('partner.partials.sidebar')
 @include('chantier.partials.overlays')
 

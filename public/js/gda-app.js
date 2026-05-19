@@ -49,6 +49,8 @@ let projectMeta = null;
 let cachedProjects = [];
 let currentUser = null;
 let clockTimer = null;
+let weatherTimer = null;
+let weatherCoords = null;
 let lastReportId = null;
 let activityLogsPage = 1;
 let activityLogsFiltersBound = false;
@@ -441,8 +443,7 @@ async function loadProject() {
       select.value = String(projectMeta.id);
     }
   }
-  const lbl = document.getElementById('project-label');
-  if (lbl) lbl.textContent = (projectMeta.name || '').substring(0, 42);
+  setHeaderProjectLabel(projectMeta.name);
   const sidebarProjectName = document.getElementById('sidebar-project-name');
   if (sidebarProjectName) sidebarProjectName.textContent = projectMeta.name || '—';
   const rp = document.getElementById('r-project');
@@ -573,6 +574,8 @@ async function initApp() {
   clockTimer = setInterval(updateClock, 1000);
   updateClock();
 
+  initNavWeather();
+
   document.getElementById('r-date').value = todayStr();
   document.getElementById('daily-date-label').textContent =
     tr('daily.datePrefix') +
@@ -604,11 +607,75 @@ async function initApp() {
   applyUiRolePermissions();
 }
 
+function setHeaderProjectLabel(name) {
+  const lbl = document.getElementById('project-label');
+  if (!lbl) return;
+  const full = String(name || '').trim();
+  lbl.textContent = full;
+  lbl.title = full;
+  lbl.setAttribute('aria-label', full ? `Projet actif : ${full}` : '');
+}
+
 function updateClock() {
   const el = document.getElementById('date-live');
   if (!el) return;
   el.textContent =
     new Date().toLocaleString(gdaDateLocale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function initNavWeather() {
+  const el = document.getElementById('header-weather');
+  if (!el) return;
+
+  if (weatherTimer) clearInterval(weatherTimer);
+
+  const run = () => void refreshNavWeather();
+  if (weatherCoords) {
+    run();
+  } else if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        weatherCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        run();
+      },
+      () => run(),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  } else {
+    run();
+  }
+
+  weatherTimer = setInterval(run, 12 * 60 * 1000);
+}
+
+async function refreshNavWeather() {
+  const el = document.getElementById('header-weather');
+  if (!el) return;
+
+  let url = '/weather/nav';
+  if (weatherCoords) {
+    url += `?lat=${encodeURIComponent(weatherCoords.lat)}&lon=${encodeURIComponent(weatherCoords.lon)}`;
+  }
+
+  try {
+    const data = await apiFetch(url);
+    if (!data.ok) return;
+
+    const city = data.city ? escapeHtml(data.city) : '';
+    const desc = data.description ? escapeHtml(data.description) : '';
+    const temp = data.temp != null ? `${data.temp}°C` : '';
+    const iconUrl = data.icon_url ? escapeHtmlAttr(data.icon_url) : '';
+
+    el.innerHTML = `
+      <span class="header-weather__sep" aria-hidden="true"></span>
+      ${iconUrl ? `<img class="header-weather__icon" src="${iconUrl}" alt="" width="32" height="32">` : ''}
+      <span class="header-weather__temp">${temp}</span>
+      ${city ? `<span class="header-weather__city" title="${desc}">${city}</span>` : ''}
+    `;
+    el.hidden = false;
+  } catch (_) {
+    /* silencieux : la nav reste utilisable sans météo */
+  }
 }
 
 async function changeDailyDate(val) {
@@ -2446,6 +2513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.gdaOnUiLangChange = function gdaOnUiLangChange() {
   updateClock();
+  void refreshNavWeather();
   const ddl = document.getElementById('daily-date-label');
   if (ddl && selectedDailyDate) {
     ddl.textContent =

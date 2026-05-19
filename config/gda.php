@@ -26,4 +26,8 @@ return [
   /** Taille max chaîne base64 (caractères) pour l’upload JSON. */
     'photo_max_base64_chars' => (int) env('GDA_PHOTO_MAX_BASE64_CHARS', 28_000_000),
 
+    /** Position par défaut si la géolocalisation est refusée (Bamako). */
+    'weather_default_lat' => (float) env('GDA_WEATHER_LAT', 12.6392),
+    'weather_default_lon' => (float) env('GDA_WEATHER_LON', -8.0029),
+
 ];
