@@ -296,3 +296,5 @@
       </div>
     </div>
   </div>
+
+@include('chantier.partials.page-forecast')

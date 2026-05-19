@@ -18,6 +18,8 @@ Route::post('/login', [AuthController::class, 'login']);
 
 /** Météo nav — public (clé OpenWeather côté serveur uniquement). */
 Route::get('/weather/nav', [WeatherController::class, 'nav']);
+Route::get('/weather/forecast', [WeatherController::class, 'forecast']);
+Route::get('/weather/geocode', [WeatherController::class, 'geocode']);
 
 Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (): void {
     Route::get('/whoami', [AuthController::class, 'whoami']);

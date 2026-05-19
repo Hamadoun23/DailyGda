@@ -14,6 +14,10 @@
   <div class="nav-item" onclick="goTo('photos')"><span class="nav-icon">◉</span> <span data-i18n="sidebar.photos">Galerie photos</span></div>
   <div class="nav-item" onclick="goTo('report')"><span class="nav-icon">◻</span> <span data-i18n="sidebar.report">Rapport PDF</span></div>
   <div class="nav-item" data-admin-only style="display:none" onclick="goTo('logs')"><span class="nav-icon">◎</span> <span data-i18n="sidebar.logs">Journal d'activité</span></div>
+
+  <div class="sidebar-section sidebar-section--forecast" data-i18n="sidebar.forecastSection">Prévisions</div>
+  <div class="nav-item" onclick="goTo('forecast')"><span class="nav-icon">⛅</span> <span data-i18n="sidebar.forecast">Prévisions météo</span></div>
+
   <a href="{{ route('home') }}" class="nav-item nav-item--link">
     <span class="nav-icon">⌂</span>
     <span data-i18n="header.chantier">Chantier</span>

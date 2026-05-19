@@ -30,4 +30,9 @@ return [
     'weather_default_lat' => (float) env('GDA_WEATHER_LAT', 12.6392),
     'weather_default_lon' => (float) env('GDA_WEATHER_LON', -8.0029),
 
+    /** Seuils d’alerte prévisions (aide à la décision chantier). */
+    'weather_wind_alert_ms' => (float) env('GDA_WEATHER_WIND_ALERT_MS', 10),
+    'weather_rain_pop_alert' => (float) env('GDA_WEATHER_RAIN_POP_ALERT', 0.55),
+    'weather_rain_mm_alert' => (float) env('GDA_WEATHER_RAIN_MM_ALERT', 1.0),
+
 ];

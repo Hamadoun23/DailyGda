@@ -716,6 +716,515 @@ async function refreshNavWeather() {
   }
 }
 
+let forecastLoading = false;
+let forecastDataCache = null;
+let forecastSelectedDay = null;
+let forecastChartInstances = [];
+let forecastSearchTimer = null;
+
+const WEATHER_LOC_KEY = 'gda_weather_location';
+
+function getWeatherLocation() {
+  try {
+    const raw = localStorage.getItem(WEATHER_LOC_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (o && typeof o.lat === 'number' && typeof o.lon === 'number') return o;
+  } catch (_) {}
+  return null;
+}
+
+function setWeatherLocation(loc) {
+  if (!loc) {
+    localStorage.removeItem(WEATHER_LOC_KEY);
+    return;
+  }
+  localStorage.setItem(WEATHER_LOC_KEY, JSON.stringify(loc));
+  weatherCoords = { lat: loc.lat, lon: loc.lon };
+}
+
+function getForecastCoords() {
+  const saved = getWeatherLocation();
+  if (saved) return saved;
+  if (weatherCoords) return { lat: weatherCoords.lat, lon: weatherCoords.lon, label: null };
+  return null;
+}
+
+function destroyForecastCharts() {
+  while (forecastChartInstances.length) {
+    const c = forecastChartInstances.pop();
+    try {
+      c.destroy();
+    } catch (_) {}
+  }
+}
+
+function forecastDayLabel(dateStr) {
+  const today = todayStr();
+  const d = new Date(dateStr + 'T12:00:00');
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+  if (dateStr === today) return tr('page.forecast.today');
+  if (dateStr === tomorrowStr) return tr('page.forecast.tomorrow');
+  return d.toLocaleDateString(gdaDateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+async function loadForecastPage(forceRefresh) {
+  const root = document.getElementById('forecast-root');
+  if (!root || forecastLoading) return;
+
+  forecastLoading = true;
+  if (!forceRefresh) {
+    root.innerHTML = `<div class="forecast-loading card"><p>${escapeHtml(tr('page.forecast.loading'))}</p></div>`;
+  }
+
+  const coords = getForecastCoords();
+  let url = API_BASE + '/weather/forecast';
+  if (coords) {
+    url += `?lat=${encodeURIComponent(coords.lat)}&lon=${encodeURIComponent(coords.lon)}`;
+  }
+
+  try {
+    const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    if (typeof gdaUiLang === 'function') headers['X-GDA-Ui-Lang'] = gdaUiLang();
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) headers.Authorization = 'Bearer ' + token;
+
+    const res = await fetch(url, { headers, credentials: 'include' });
+    if (!res.ok) throw new Error(tr('page.forecast.err'));
+    const data = await res.json();
+    if (!data.ok) {
+      const msg =
+        data.code === 'missing_api_key' || data.code === 'invalid_api_key'
+          ? tr('page.forecast.errKey')
+          : data.message || tr('page.forecast.err');
+      root.innerHTML = `<div class="card forecast-error"><p>${escapeHtml(msg)}</p></div>`;
+      return;
+    }
+    forecastDataCache = data;
+    if (!forecastSelectedDay && data.days?.length) {
+      const today = todayStr();
+      forecastSelectedDay = data.days.some(d => d.date === today) ? today : data.days[0].date;
+    }
+    renderForecastPage(data);
+    void refreshNavWeather();
+  } catch (e) {
+    root.innerHTML = `<div class="card forecast-error"><p>${escapeHtml(e.message || tr('page.forecast.err'))}</p></div>`;
+  } finally {
+    forecastLoading = false;
+  }
+}
+
+function forecastSlotsForFilter(data, dayKey) {
+  const all = [];
+  (data.days || []).forEach(d => (d.slots || []).forEach(s => all.push({ ...s, date: d.date })));
+  if (dayKey === '__24h__') return all.slice(0, 8);
+  if (dayKey && dayKey !== '__all__') {
+    const day = (data.days || []).find(d => d.date === dayKey);
+    return day?.slots || [];
+  }
+  return all;
+}
+
+function forecastDayPillsHtml(data) {
+  const pills = [
+    `<button type="button" class="forecast-day-pill${forecastSelectedDay === '__24h__' ? ' active' : ''}" data-day="__24h__">${escapeHtml(tr('page.forecast.next24h'))}</button>`,
+  ];
+  (data.days || []).forEach(d => {
+    const active = forecastSelectedDay === d.date ? ' active' : '';
+    const s = d.summary || {};
+    pills.push(
+      `<button type="button" class="forecast-day-pill${active}" data-day="${escapeHtmlAttr(d.date)}">
+        <span class="forecast-day-pill__name">${escapeHtml(forecastDayLabel(d.date))}</span>
+        <span class="forecast-day-pill__meta">${s.temp_min}–${s.temp_max}° · ${s.pop_max}%</span>
+      </button>`,
+    );
+  });
+  return pills.join('');
+}
+
+function renderForecastCharts(slots) {
+  destroyForecastCharts();
+  if (typeof Chart === 'undefined' || !slots.length) return;
+
+  const labels = slots.map(s => s.time || '');
+  const temps = slots.map(s => s.temp);
+  const feels = slots.map(s => s.feels_like);
+  const pops = slots.map(s => s.pop_percent);
+  const winds = slots.map(s => s.wind_kmh);
+
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c8521a';
+  const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#1a5c8a';
+
+  const mkChart = (canvasId, config) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    forecastChartInstances.push(new Chart(canvas.getContext('2d'), config));
+  };
+
+  mkChart('forecast-chart-temp', {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: tr('page.forecast.chartTemp'),
+          data: temps,
+          borderColor: accent,
+          backgroundColor: 'rgba(200, 82, 26, 0.12)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+        },
+        {
+          label: tr('page.forecast.chartFeels'),
+          data: feels,
+          borderColor: accent2,
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.35,
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { title: { display: true, text: '°C' } } },
+    },
+  });
+
+  mkChart('forecast-chart-rain', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: tr('page.forecast.chartRain'),
+          data: pops,
+          backgroundColor: 'rgba(26, 92, 138, 0.55)',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { min: 0, max: 100, title: { display: true, text: '%' } } },
+    },
+  });
+
+  mkChart('forecast-chart-wind', {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: tr('page.forecast.chartWind'),
+          data: winds,
+          borderColor: '#b87c10',
+          backgroundColor: 'rgba(184, 124, 16, 0.15)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { min: 0, title: { display: true, text: 'km/h' } } },
+    },
+  });
+}
+
+let forecastLocClickBound = false;
+
+function bindForecastLocationUi() {
+  const input = document.getElementById('forecast-loc-input');
+  const results = document.getElementById('forecast-loc-results');
+  const myBtn = document.getElementById('forecast-loc-my');
+  if (!input || !results) return;
+
+  const saved = getWeatherLocation();
+  if (saved?.label) input.value = saved.label;
+
+  input.oninput = () => {
+    clearTimeout(forecastSearchTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      results.hidden = true;
+      results.innerHTML = '';
+      return;
+    }
+    forecastSearchTimer = setTimeout(() => void searchForecastLocations(q), 350);
+  };
+
+  input.onfocus = () => {
+    if (results.innerHTML && input.value.trim().length >= 2) results.hidden = false;
+  };
+
+  if (!forecastLocClickBound) {
+    forecastLocClickBound = true;
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.forecast-loc-search')) {
+        const r = document.getElementById('forecast-loc-results');
+        if (r) r.hidden = true;
+      }
+    });
+  }
+
+  myBtn?.replaceWith(myBtn.cloneNode(true));
+  document.getElementById('forecast-loc-my')?.addEventListener('click', () => void useForecastMyLocation());
+
+  results.onclick = e => {
+    const btn = e.target.closest('[data-lat]');
+    if (!btn) return;
+    selectForecastLocation({
+      lat: parseFloat(btn.dataset.lat),
+      lon: parseFloat(btn.dataset.lon),
+      label: btn.dataset.label || '',
+      name: btn.dataset.name || '',
+      country: btn.dataset.country || '',
+    });
+    results.hidden = true;
+  };
+
+  const pills = document.getElementById('forecast-day-pills');
+  if (pills) {
+    pills.onclick = e => {
+      const pill = e.target.closest('.forecast-day-pill');
+      if (!pill || !forecastDataCache) return;
+      forecastSelectedDay = pill.dataset.day;
+      renderForecastPage(forecastDataCache);
+    };
+  }
+}
+
+async function searchForecastLocations(q) {
+  const results = document.getElementById('forecast-loc-results');
+  if (!results) return;
+
+  try {
+    const headers = { Accept: 'application/json' };
+    if (typeof gdaUiLang === 'function') headers['X-GDA-Ui-Lang'] = gdaUiLang();
+    const res = await fetch(`${API_BASE}/weather/geocode?q=${encodeURIComponent(q)}&limit=8`, { headers });
+    const data = await res.json();
+    if (!data.ok || !data.results?.length) {
+      results.innerHTML = `<div class="forecast-loc-item forecast-loc-item--empty">${escapeHtml(tr('page.forecast.noResults'))}</div>`;
+      results.hidden = false;
+      return;
+    }
+    results.innerHTML = data.results
+      .map(
+        r =>
+          `<button type="button" class="forecast-loc-item" data-lat="${r.lat}" data-lon="${r.lon}" data-label="${escapeHtmlAttr(r.label)}" data-name="${escapeHtmlAttr(r.name)}" data-country="${escapeHtmlAttr(r.country)}">${escapeHtml(r.label)}</button>`,
+      )
+      .join('');
+    results.hidden = false;
+  } catch (_) {
+    results.hidden = true;
+  }
+}
+
+function selectForecastLocation(loc) {
+  setWeatherLocation(loc);
+  const input = document.getElementById('forecast-loc-input');
+  if (input) input.value = loc.label || loc.name || '';
+  forecastSelectedDay = '__24h__';
+  void loadForecastPage(true);
+}
+
+function useForecastMyLocation() {
+  if (!navigator.geolocation) {
+    toast(tr('page.forecast.geoUnavailable'), 'err');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      selectForecastLocation({
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        label: tr('page.forecast.myLocation'),
+        name: '',
+        country: '',
+      });
+    },
+    () => toast(tr('page.forecast.geoDenied'), 'err'),
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+  );
+}
+
+function renderForecastPage(data) {
+  const root = document.getElementById('forecast-root');
+  if (!root) return;
+
+  const saved = getWeatherLocation();
+  const loc = saved?.label || [data.city, data.country].filter(Boolean).join(', ') || '—';
+  const updated = data.fetched_at
+    ? new Date(data.fetched_at).toLocaleString(gdaDateLocale(), {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—';
+
+  const th = data.thresholds || {};
+  const guide = tr('page.forecast.guideText')
+    .replace('{rainPop}', String(th.rain_pop_percent ?? 55))
+    .replace('{rainMm}', String(th.rain_mm ?? 1))
+    .replace('{windKmh}', String(th.wind_kmh ?? 36));
+
+  const stats = data.stats || {};
+  const cur = data.current || {};
+  if (!forecastSelectedDay) {
+    const today = todayStr();
+    forecastSelectedDay = data.days?.some(d => d.date === today) ? today : data.days?.[0]?.date || '__24h__';
+  }
+  const dayKey = forecastSelectedDay;
+  const chartSlots = forecastSlotsForFilter(data, dayKey);
+  const tableSlots =
+    dayKey === '__24h__' ? chartSlots : (data.days || []).find(d => d.date === dayKey)?.slots || chartSlots;
+
+  const alerts = (data.alerts || []).filter(a => dayKey === '__24h__' || !a.date || a.date === dayKey);
+  let alertsHtml = '';
+  if (alerts.length) {
+    alertsHtml = alerts
+      .map(a => {
+        const sev = a.severity === 'high' ? 'high' : a.severity === 'medium' ? 'medium' : 'info';
+        const datePart = a.date ? `${forecastDayLabel(a.date)} ` : '';
+        return `<div class="forecast-alert forecast-alert--${sev}">
+          <span class="forecast-alert__time">${escapeHtml(datePart + (a.time || ''))}</span>
+          <span class="forecast-alert__msg">${escapeHtml(a.message || '')}</span>
+        </div>`;
+      })
+      .join('');
+  } else {
+    alertsHtml = `<p class="forecast-alerts-empty">${escapeHtml(tr('page.forecast.alertsEmpty'))}</p>`;
+  }
+
+  const tableRows = tableSlots
+    .map(slot => {
+      const emoji = weatherIconEmoji(slot.icon);
+      const rain =
+        slot.pop_percent > 0 || slot.rain_mm > 0 ? `${slot.pop_percent}% · ${slot.rain_mm} mm` : '—';
+      const wind =
+        slot.wind_gust_kmh != null ? `${slot.wind_kmh} (${slot.wind_gust_kmh})` : `${slot.wind_kmh}`;
+      const rowClass =
+        (slot.pop_percent >= (th.rain_pop_percent ?? 55) && slot.pop_percent > 0) ||
+        slot.rain_mm >= (th.rain_mm ?? 1) ||
+        slot.wind_kmh >= (th.wind_kmh ?? 36)
+          ? ' forecast-slot-row--alert'
+          : '';
+      return `<tr class="forecast-slot-row${rowClass}">
+        <td>${escapeHtml(slot.time || '')}</td>
+        <td><span class="forecast-slot-emoji">${emoji}</span> ${slot.temp}°C</td>
+        <td>${slot.feels_like}°C</td>
+        <td>${wind} km/h</td>
+        <td>${escapeHtml(rain)}</td>
+        <td>${escapeHtml(slot.description || '')}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const nowTemp = cur.temp != null ? `${cur.temp}°C` : '—';
+  const nowDesc = cur.description ? escapeHtml(cur.description) : '';
+  const periodLabel = dayKey === '__24h__' ? tr('page.forecast.next24h') : forecastDayLabel(dayKey);
+
+  root.innerHTML = `
+    <div class="card forecast-loc-card">
+      <div class="forecast-loc-search">
+        <label class="forecast-loc-label" for="forecast-loc-input">${escapeHtml(tr('page.forecast.searchLabel'))}</label>
+        <div class="forecast-loc-row">
+          <input type="search" id="forecast-loc-input" class="forecast-loc-input" placeholder="${escapeHtmlAttr(tr('page.forecast.searchPh'))}" autocomplete="off" />
+          <button type="button" class="btn btn-secondary btn-sm" id="forecast-loc-my" title="${escapeHtmlAttr(tr('page.forecast.myLocation'))}">📍</button>
+        </div>
+        <div id="forecast-loc-results" class="forecast-loc-results" hidden></div>
+        <p class="forecast-loc-active"><strong>${escapeHtml(tr('page.forecast.location'))} :</strong> ${escapeHtml(loc)} · ${escapeHtml(tr('page.forecast.updated'))} ${escapeHtml(updated)}</p>
+      </div>
+    </div>
+
+    <div class="stats-row forecast-stats-row">
+      <div class="stat-card s-prog">
+        <div class="stat-val">${nowTemp}</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statNow'))}</div>
+        <div class="forecast-stat-sub">${nowDesc}</div>
+      </div>
+      <div class="stat-card s-total">
+        <div class="stat-val">${stats.temp_min ?? '—'}–${stats.temp_max ?? '—'}°</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statTempRange'))}</div>
+      </div>
+      <div class="stat-card s-late">
+        <div class="stat-val">${stats.wind_max_kmh ?? '—'}</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statWind'))} (km/h)</div>
+      </div>
+      <div class="stat-card s-done">
+        <div class="stat-val">${stats.pop_max ?? '—'}%</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statRain'))}</div>
+      </div>
+      <div class="stat-card s-total">
+        <div class="stat-val">${stats.alert_count ?? 0}</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statAlerts'))}</div>
+      </div>
+    </div>
+
+    <div class="forecast-day-pills-wrap">
+      <div class="forecast-day-pills" id="forecast-day-pills">${forecastDayPillsHtml(data)}</div>
+    </div>
+
+    <div class="forecast-charts-grid">
+      <div class="card forecast-chart-card">
+        <div class="card-head">${escapeHtml(tr('page.forecast.chartTemp'))}</div>
+        <div class="forecast-chart-canvas"><canvas id="forecast-chart-temp"></canvas></div>
+      </div>
+      <div class="card forecast-chart-card">
+        <div class="card-head">${escapeHtml(tr('page.forecast.chartRain'))}</div>
+        <div class="forecast-chart-canvas"><canvas id="forecast-chart-rain"></canvas></div>
+      </div>
+      <div class="card forecast-chart-card">
+        <div class="card-head">${escapeHtml(tr('page.forecast.chartWind'))}</div>
+        <div class="forecast-chart-canvas"><canvas id="forecast-chart-wind"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card forecast-guide">
+      <div class="card-head">${escapeHtml(tr('page.forecast.guideTitle'))}</div>
+      <p class="forecast-guide-text">${escapeHtml(guide)}</p>
+    </div>
+    <div class="card forecast-alerts-card">
+      <div class="card-head">${escapeHtml(tr('page.forecast.alertsTitle'))}</div>
+      <div class="forecast-alerts">${alertsHtml}</div>
+    </div>
+    <div class="card forecast-day-card">
+      <div class="card-head">${escapeHtml(tr('page.forecast.slotsTitle'))} — ${escapeHtml(periodLabel)}</div>
+      <div class="forecast-table-wrap">
+        <table class="forecast-table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(tr('page.forecast.thTime'))}</th>
+              <th>${escapeHtml(tr('page.forecast.thTemp'))}</th>
+              <th>${escapeHtml(tr('page.forecast.thFeels'))}</th>
+              <th>${escapeHtml(tr('page.forecast.thWind'))}</th>
+              <th>${escapeHtml(tr('page.forecast.thRain'))}</th>
+              <th>${escapeHtml(tr('page.forecast.thDesc'))}</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows || `<tr><td colspan="6">${escapeHtml(tr('page.forecast.noSlots'))}</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  bindForecastLocationUi();
+  requestAnimationFrame(() => renderForecastCharts(chartSlots));
+}
+
 async function changeDailyDate(val) {
   if (!val) return;
   selectedDailyDate = val;
@@ -791,6 +1300,7 @@ function goTo(page) {
   }
   if (page !== 'dashboard') destroyDashboardCharts();
   if (page !== 'report') destroyReportStatsCharts();
+  if (page !== 'forecast') destroyForecastCharts();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -815,6 +1325,9 @@ function goTo(page) {
       return;
     }
     void loadActivityLogs(1);
+  }
+  if (page === 'forecast') {
+    void loadForecastPage(false);
   }
 }
 
@@ -2578,6 +3091,7 @@ window.gdaOnUiLangChange = function gdaOnUiLangChange() {
     void loadPhotosCategory(currentPhotoTab).then(() => renderPhotos());
   }
   if (active === 'page-logs' && currentUser?.is_admin) void loadActivityLogs(activityLogsPage);
+  if (active === 'page-forecast') void loadForecastPage(true);
   applyPartnerShellHides();
   applyAdminShellShows();
 };

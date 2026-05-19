@@ -6,6 +6,9 @@
   <div class="nav-item" onclick="goTo('tasks')"><span class="nav-icon">≡</span> <span data-i18n="sidebar.tasks">Toutes les tâches</span></div>
   <div class="nav-item" onclick="goTo('report')"><span class="nav-icon">◻</span> <span data-i18n="sidebar.report">Rapport PDF</span></div>
 
+  <div class="sidebar-section sidebar-section--forecast" data-i18n="sidebar.forecastSection">Prévisions</div>
+  <div class="nav-item" onclick="goTo('forecast')"><span class="nav-icon">⛅</span> <span data-i18n="sidebar.forecast">Prévisions météo</span></div>
+
   <div style="padding:16px 16px 0">
     <div class="sidebar-progress">
       <div class="sp-label" data-i18n="sidebar.overall">Progression globale</div>
