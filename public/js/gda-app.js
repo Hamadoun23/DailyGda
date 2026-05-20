@@ -828,20 +828,102 @@ function forecastSlotsForFilter(data, dayKey) {
 }
 
 function forecastDayPillsHtml(data) {
+  const th = data.thresholds || {};
   const pills = [
-    `<button type="button" class="forecast-day-pill${forecastSelectedDay === '__24h__' ? ' active' : ''}" data-day="__24h__">${escapeHtml(tr('page.forecast.next24h'))}</button>`,
+    `<button type="button" class="forecast-day-pill${forecastSelectedDay === '__24h__' ? ' active' : ''}" data-day="__24h__">
+      <span class="forecast-day-pill__name">${escapeHtml(tr('page.forecast.next24h'))}</span>
+    </button>`,
   ];
   (data.days || []).forEach(d => {
     const active = forecastSelectedDay === d.date ? ' active' : '';
-    const s = d.summary || {};
+    const level = forecastAssessSlots(d.slots || [], th);
+    const vm = forecastVerdictMeta(level);
     pills.push(
       `<button type="button" class="forecast-day-pill${active}" data-day="${escapeHtmlAttr(d.date)}">
         <span class="forecast-day-pill__name">${escapeHtml(forecastDayLabel(d.date))}</span>
-        <span class="forecast-day-pill__meta">${s.temp_min}–${s.temp_max}° · ${s.pop_max}%</span>
+        <span class="forecast-day-pill__meta">${vm.icon} ${escapeHtml(tr(vm.shortKey))}</span>
       </button>`,
     );
   });
   return pills.join('');
+}
+
+function forecastAssessSlots(slots, th) {
+  if (!slots.length) return 'good';
+  let score = 0;
+  const popT = th.rain_pop_percent ?? 55;
+  const windT = th.wind_kmh ?? 36;
+  slots.forEach(s => {
+    const main = String(s.weather_main || '').toLowerCase();
+    if (main === 'thunderstorm') score += 3;
+    else if (s.pop_percent >= popT || s.rain_mm >= (th.rain_mm ?? 1)) score += 2;
+    else if (s.wind_kmh >= windT) score += 1;
+  });
+  if (score >= 3) return 'bad';
+  if (score >= 1) return 'caution';
+  return 'good';
+}
+
+function forecastVerdictMeta(level) {
+  const map = {
+    good: {
+      icon: '✅',
+      shortKey: 'page.forecast.verdictGoodShort',
+      titleKey: 'page.forecast.verdictGood',
+      adviceKey: 'page.forecast.verdictGoodAdvice',
+      cls: 'forecast-verdict--good',
+    },
+    caution: {
+      icon: '⚠️',
+      shortKey: 'page.forecast.verdictCautionShort',
+      titleKey: 'page.forecast.verdictCaution',
+      adviceKey: 'page.forecast.verdictCautionAdvice',
+      cls: 'forecast-verdict--caution',
+    },
+    bad: {
+      icon: '🛑',
+      shortKey: 'page.forecast.verdictBadShort',
+      titleKey: 'page.forecast.verdictBad',
+      adviceKey: 'page.forecast.verdictBadAdvice',
+      cls: 'forecast-verdict--bad',
+    },
+  };
+  return map[level] || map.good;
+}
+
+function forecastRainPlain(pop) {
+  if (pop >= 60) return tr('page.forecast.rainLikely');
+  if (pop >= 30) return tr('page.forecast.rainMaybe');
+  return tr('page.forecast.rainUnlikely');
+}
+
+function forecastWindPlain(kmh) {
+  if (kmh >= 40) return tr('page.forecast.windStrong');
+  if (kmh >= 20) return tr('page.forecast.windModerate');
+  return tr('page.forecast.windLight');
+}
+
+function forecastSlotAdviceLevel(slot, th) {
+  const main = String(slot.weather_main || '').toLowerCase();
+  const popT = th.rain_pop_percent ?? 55;
+  const windT = th.wind_kmh ?? 36;
+  if (main === 'thunderstorm') return 'bad';
+  if (slot.pop_percent >= popT || slot.rain_mm >= (th.rain_mm ?? 1)) return 'warn';
+  if (slot.wind_kmh >= windT) return 'warn';
+  return 'ok';
+}
+
+function forecastSlotAdvice(slot, th) {
+  const level = forecastSlotAdviceLevel(slot, th);
+  if (level === 'bad') return tr('page.forecast.adviceStorm');
+  if (level === 'warn') {
+    const main = String(slot.weather_main || '').toLowerCase();
+    if (main === 'rain' || main === 'drizzle' || slot.pop_percent >= (th.rain_pop_percent ?? 55)) {
+      return tr('page.forecast.adviceRain');
+    }
+    return tr('page.forecast.adviceWind');
+  }
+  return tr('page.forecast.adviceOk');
 }
 
 function renderForecastCharts(slots) {
@@ -850,96 +932,52 @@ function renderForecastCharts(slots) {
 
   const labels = slots.map(s => s.time || '');
   const temps = slots.map(s => s.temp);
-  const feels = slots.map(s => s.feels_like);
-  const pops = slots.map(s => s.pop_percent);
-  const winds = slots.map(s => s.wind_kmh);
-
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c8521a';
-  const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#1a5c8a';
+  const canvas = document.getElementById('forecast-chart-temp');
+  if (!canvas) return;
 
-  const mkChart = (canvasId, config) => {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    forecastChartInstances.push(new Chart(canvas.getContext('2d'), config));
-  };
-
-  mkChart('forecast-chart-temp', {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: tr('page.forecast.chartTemp'),
-          data: temps,
-          borderColor: accent,
-          backgroundColor: 'rgba(200, 82, 26, 0.12)',
-          fill: true,
-          tension: 0.35,
-          pointRadius: 3,
+  forecastChartInstances.push(
+    new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: tr('page.forecast.chartTempSimple'),
+            data: temps,
+            borderColor: accent,
+            backgroundColor: 'rgba(200, 82, 26, 0.15)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            borderWidth: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.parsed.y}°C`,
+            },
+          },
         },
-        {
-          label: tr('page.forecast.chartFeels'),
-          data: feels,
-          borderColor: accent2,
-          borderDash: [4, 4],
-          fill: false,
-          tension: 0.35,
-          pointRadius: 2,
+        scales: {
+          x: {
+            ticks: { maxRotation: 0, font: { size: 12 } },
+          },
+          y: {
+            ticks: { callback: v => `${v}°` },
+            title: { display: false },
+          },
         },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
-      scales: { y: { title: { display: true, text: '°C' } } },
-    },
-  });
-
-  mkChart('forecast-chart-rain', {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: tr('page.forecast.chartRain'),
-          data: pops,
-          backgroundColor: 'rgba(26, 92, 138, 0.55)',
-          borderRadius: 4,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { min: 0, max: 100, title: { display: true, text: '%' } } },
-    },
-  });
-
-  mkChart('forecast-chart-wind', {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: tr('page.forecast.chartWind'),
-          data: winds,
-          borderColor: '#b87c10',
-          backgroundColor: 'rgba(184, 124, 16, 0.15)',
-          fill: true,
-          tension: 0.35,
-          pointRadius: 3,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { min: 0, title: { display: true, text: 'km/h' } } },
-    },
-  });
+      },
+    }),
+  );
 }
 
 let forecastLocClickBound = false;
@@ -1076,11 +1114,6 @@ function renderForecastPage(data) {
     : '—';
 
   const th = data.thresholds || {};
-  const guide = tr('page.forecast.guideText')
-    .replace('{rainPop}', String(th.rain_pop_percent ?? 55))
-    .replace('{rainMm}', String(th.rain_mm ?? 1))
-    .replace('{windKmh}', String(th.wind_kmh ?? 36));
-
   const stats = data.stats || {};
   const cur = data.current || {};
   if (!forecastSelectedDay) {
@@ -1092,16 +1125,22 @@ function renderForecastPage(data) {
   const tableSlots =
     dayKey === '__24h__' ? chartSlots : (data.days || []).find(d => d.date === dayKey)?.slots || chartSlots;
 
+  const periodLevel = forecastAssessSlots(tableSlots, th);
+  const periodVerdict = forecastVerdictMeta(periodLevel);
+  const periodLabel = dayKey === '__24h__' ? tr('page.forecast.next24h') : forecastDayLabel(dayKey);
+
   const alerts = (data.alerts || []).filter(a => dayKey === '__24h__' || !a.date || a.date === dayKey);
   let alertsHtml = '';
   if (alerts.length) {
     alertsHtml = alerts
+      .slice(0, 6)
       .map(a => {
         const sev = a.severity === 'high' ? 'high' : a.severity === 'medium' ? 'medium' : 'info';
         const datePart = a.date ? `${forecastDayLabel(a.date)} ` : '';
+        const plain = forecastPlainAlertMessage(a);
         return `<div class="forecast-alert forecast-alert--${sev}">
           <span class="forecast-alert__time">${escapeHtml(datePart + (a.time || ''))}</span>
-          <span class="forecast-alert__msg">${escapeHtml(a.message || '')}</span>
+          <span class="forecast-alert__msg">${escapeHtml(plain)}</span>
         </div>`;
       })
       .join('');
@@ -1109,33 +1148,29 @@ function renderForecastPage(data) {
     alertsHtml = `<p class="forecast-alerts-empty">${escapeHtml(tr('page.forecast.alertsEmpty'))}</p>`;
   }
 
-  const tableRows = tableSlots
+  const timelineHtml = tableSlots
     .map(slot => {
       const emoji = weatherIconEmoji(slot.icon);
-      const rain =
-        slot.pop_percent > 0 || slot.rain_mm > 0 ? `${slot.pop_percent}% · ${slot.rain_mm} mm` : '—';
-      const wind =
-        slot.wind_gust_kmh != null ? `${slot.wind_kmh} (${slot.wind_gust_kmh})` : `${slot.wind_kmh}`;
-      const rowClass =
-        (slot.pop_percent >= (th.rain_pop_percent ?? 55) && slot.pop_percent > 0) ||
-        slot.rain_mm >= (th.rain_mm ?? 1) ||
-        slot.wind_kmh >= (th.wind_kmh ?? 36)
-          ? ' forecast-slot-row--alert'
-          : '';
-      return `<tr class="forecast-slot-row${rowClass}">
-        <td>${escapeHtml(slot.time || '')}</td>
-        <td><span class="forecast-slot-emoji">${emoji}</span> ${slot.temp}°C</td>
-        <td>${slot.feels_like}°C</td>
-        <td>${wind} km/h</td>
-        <td>${escapeHtml(rain)}</td>
-        <td>${escapeHtml(slot.description || '')}</td>
-      </tr>`;
+      const advice = forecastSlotAdvice(slot, th);
+      const level = forecastSlotAdviceLevel(slot, th);
+      const adviceCls =
+        level === 'ok' ? 'forecast-timeline__advice--ok' : level === 'bad' ? 'forecast-timeline__advice--bad' : 'forecast-timeline__advice--warn';
+      return `<div class="forecast-timeline__item">
+        <div class="forecast-timeline__time">${escapeHtml(slot.time || '')}</div>
+        <div class="forecast-timeline__body">
+          <span class="forecast-timeline__emoji">${emoji}</span>
+          <div>
+            <div class="forecast-timeline__main">${slot.temp}°C · ${escapeHtml(slot.description || '')}</div>
+            <div class="forecast-timeline__sub">${escapeHtml(forecastRainPlain(slot.pop_percent))} · ${escapeHtml(forecastWindPlain(slot.wind_kmh))}</div>
+            <div class="forecast-timeline__advice ${adviceCls}">${escapeHtml(advice)}</div>
+          </div>
+        </div>
+      </div>`;
     })
     .join('');
 
   const nowTemp = cur.temp != null ? `${cur.temp}°C` : '—';
   const nowDesc = cur.description ? escapeHtml(cur.description) : '';
-  const periodLabel = dayKey === '__24h__' ? tr('page.forecast.next24h') : forecastDayLabel(dayKey);
 
   root.innerHTML = `
     <div class="card forecast-loc-card">
@@ -1150,7 +1185,16 @@ function renderForecastPage(data) {
       </div>
     </div>
 
-    <div class="stats-row forecast-stats-row">
+    <div class="forecast-verdict ${periodVerdict.cls}">
+      <div class="forecast-verdict__icon">${periodVerdict.icon}</div>
+      <div>
+        <div class="forecast-verdict__title">${escapeHtml(tr(periodVerdict.titleKey))}</div>
+        <div class="forecast-verdict__sub">${escapeHtml(tr(periodVerdict.adviceKey))}</div>
+        <div class="forecast-verdict__period">${escapeHtml(periodLabel)}</div>
+      </div>
+    </div>
+
+    <div class="stats-row forecast-stats-row forecast-stats-row--simple">
       <div class="stat-card s-prog">
         <div class="stat-val">${nowTemp}</div>
         <div class="stat-lbl">${escapeHtml(tr('page.forecast.statNow'))}</div>
@@ -1158,71 +1202,55 @@ function renderForecastPage(data) {
       </div>
       <div class="stat-card s-total">
         <div class="stat-val">${stats.temp_min ?? '—'}–${stats.temp_max ?? '—'}°</div>
-        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statTempRange'))}</div>
-      </div>
-      <div class="stat-card s-late">
-        <div class="stat-val">${stats.wind_max_kmh ?? '—'}</div>
-        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statWind'))} (km/h)</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statTempSimple'))}</div>
       </div>
       <div class="stat-card s-done">
-        <div class="stat-val">${stats.pop_max ?? '—'}%</div>
-        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statRain'))}</div>
+        <div class="stat-val forecast-stat-val--text">${escapeHtml(forecastRainPlain(stats.pop_max ?? 0))}</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statRainSimple'))}</div>
       </div>
-      <div class="stat-card s-total">
-        <div class="stat-val">${stats.alert_count ?? 0}</div>
-        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statAlerts'))}</div>
+      <div class="stat-card s-late">
+        <div class="stat-val forecast-stat-val--text">${escapeHtml(forecastWindPlain(stats.wind_max_kmh ?? 0))}</div>
+        <div class="stat-lbl">${escapeHtml(tr('page.forecast.statWindSimple'))}</div>
       </div>
     </div>
 
     <div class="forecast-day-pills-wrap">
+      <p class="forecast-pills-hint">${escapeHtml(tr('page.forecast.pillsHint'))}</p>
       <div class="forecast-day-pills" id="forecast-day-pills">${forecastDayPillsHtml(data)}</div>
     </div>
 
-    <div class="forecast-charts-grid">
-      <div class="card forecast-chart-card">
-        <div class="card-head">${escapeHtml(tr('page.forecast.chartTemp'))}</div>
-        <div class="forecast-chart-canvas"><canvas id="forecast-chart-temp"></canvas></div>
-      </div>
-      <div class="card forecast-chart-card">
-        <div class="card-head">${escapeHtml(tr('page.forecast.chartRain'))}</div>
-        <div class="forecast-chart-canvas"><canvas id="forecast-chart-rain"></canvas></div>
-      </div>
-      <div class="card forecast-chart-card">
-        <div class="card-head">${escapeHtml(tr('page.forecast.chartWind'))}</div>
-        <div class="forecast-chart-canvas"><canvas id="forecast-chart-wind"></canvas></div>
-      </div>
+    <div class="card forecast-chart-card forecast-chart-card--simple">
+      <div class="card-head">${escapeHtml(tr('page.forecast.chartTempSimple'))}</div>
+      <p class="forecast-chart-hint">${escapeHtml(tr('page.forecast.chartHint'))}</p>
+      <div class="forecast-chart-canvas forecast-chart-canvas--simple"><canvas id="forecast-chart-temp"></canvas></div>
     </div>
 
-    <div class="card forecast-guide">
-      <div class="card-head">${escapeHtml(tr('page.forecast.guideTitle'))}</div>
-      <p class="forecast-guide-text">${escapeHtml(guide)}</p>
-    </div>
     <div class="card forecast-alerts-card">
-      <div class="card-head">${escapeHtml(tr('page.forecast.alertsTitle'))}</div>
+      <div class="card-head">${escapeHtml(tr('page.forecast.alertsTitleSimple'))}</div>
       <div class="forecast-alerts">${alertsHtml}</div>
     </div>
+
     <div class="card forecast-day-card">
-      <div class="card-head">${escapeHtml(tr('page.forecast.slotsTitle'))} — ${escapeHtml(periodLabel)}</div>
-      <div class="forecast-table-wrap">
-        <table class="forecast-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(tr('page.forecast.thTime'))}</th>
-              <th>${escapeHtml(tr('page.forecast.thTemp'))}</th>
-              <th>${escapeHtml(tr('page.forecast.thFeels'))}</th>
-              <th>${escapeHtml(tr('page.forecast.thWind'))}</th>
-              <th>${escapeHtml(tr('page.forecast.thRain'))}</th>
-              <th>${escapeHtml(tr('page.forecast.thDesc'))}</th>
-            </tr>
-          </thead>
-          <tbody>${tableRows || `<tr><td colspan="6">${escapeHtml(tr('page.forecast.noSlots'))}</td></tr>`}</tbody>
-        </table>
-      </div>
+      <div class="card-head">${escapeHtml(tr('page.forecast.timelineTitle'))} — ${escapeHtml(periodLabel)}</div>
+      <div class="forecast-timeline">${timelineHtml || `<p class="forecast-alerts-empty">${escapeHtml(tr('page.forecast.noSlots'))}</p>`}</div>
+    </div>
+
+    <div class="card forecast-trust">
+      <div class="card-head">${escapeHtml(tr('page.forecast.trustTitle'))}</div>
+      <p class="forecast-guide-text">${escapeHtml(tr('page.forecast.trustText'))}</p>
     </div>
   `;
 
   bindForecastLocationUi();
   requestAnimationFrame(() => renderForecastCharts(chartSlots));
+}
+
+function forecastPlainAlertMessage(alert) {
+  const types = alert.types || [];
+  if (types.includes('storm')) return tr('page.forecast.adviceStorm');
+  if (types.includes('rain')) return tr('page.forecast.adviceRain');
+  if (types.includes('wind')) return tr('page.forecast.adviceWind');
+  return alert.message || tr('page.forecast.adviceCaution');
 }
 
 async function changeDailyDate(val) {
