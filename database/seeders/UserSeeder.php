@@ -13,10 +13,15 @@ class UserSeeder extends Seeder
     {
         $accounts = [
             ['username' => 'diallo', 'name' => 'Diallo', 'password' => 'Yaya@daily26', 'role' => User::ROLE_ADMIN, 'initials' => 'DI'],
-            ['username' => 'sacko', 'name' => 'Sacko', 'password' => 'Const@daily26', 'role' => User::ROLE_ADMIN, 'initials' => 'SA'],
+            ['username' => 'sacko2', 'name' => 'Sacko2', 'password' => 'Const@daily26', 'role' => User::ROLE_ADMIN, 'initials' => 'SA'],
             ['username' => 'admingda', 'name' => 'Admingda', 'password' => 'Dymo@daily', 'role' => User::ROLE_ADMIN, 'initials' => 'DY'],
             ['username' => 'b2gold', 'name' => 'B2gold', 'password' => 'Partner@26daily', 'role' => User::ROLE_PARTNER, 'initials' => 'B2'],
         ];
+
+        User::query()->where('username', 'sacko')->update([
+            'username' => 'sacko2',
+            'name' => 'Sacko2',
+        ]);
 
         foreach ($accounts as $row) {
             User::updateOrCreate(

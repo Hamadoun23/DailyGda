@@ -24,6 +24,7 @@
     <table class="tbl" id="projects-table" style="display:none">
       <thead>
         <tr>
+          <th class="tbl-col-drag" aria-hidden="true"></th>
           <th data-i18n="projects.colName">Nom</th>
           <th data-i18n="projects.colStatus">Statut</th>
           <th style="text-align:center" data-i18n="projects.colProgress">Progression</th>

@@ -103,6 +103,144 @@ function toast(msg, type = '') {
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
+function gripHandle() {
+  const label = tr('projects.dragHandle');
+  return `<span class="gda-drag-handle" draggable="true" role="button" aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}"><i></i><i></i><i></i><i></i><i></i><i></i></span>`;
+}
+
+/**
+ * Liste réordonnable par glisser-déposer (poignée uniquement).
+ * @param {HTMLElement} container
+ * @param {{ itemSelector: string, idAttr: string, onReorder: (ids: number[]) => Promise<void>, onError?: () => void }} opts
+ */
+function initSortableList(container, opts) {
+  if (!container || container.dataset.sortBound === '1') return;
+  container.dataset.sortBound = '1';
+
+  let dragId = null;
+
+  container.addEventListener('dragstart', e => {
+    const handle = e.target.closest('.gda-drag-handle');
+    if (!handle) return;
+    const item = handle.closest(opts.itemSelector);
+    if (!item || !container.contains(item)) return;
+    e.stopPropagation();
+    dragId = item.getAttribute(opts.idAttr);
+    item.classList.add('gda-sort-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragId || '');
+    }
+  });
+
+  container.addEventListener('dragend', () => {
+    container.querySelectorAll(opts.itemSelector).forEach(el => {
+      el.classList.remove('gda-sort-dragging', 'gda-sort-drop-target');
+    });
+    dragId = null;
+  });
+
+  container.addEventListener('dragover', e => {
+    if (!dragId) return;
+    const over = e.target.closest(opts.itemSelector);
+    if (!over || !container.contains(over)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    container.querySelectorAll(opts.itemSelector).forEach(el => {
+      el.classList.toggle('gda-sort-drop-target', el === over && el.getAttribute(opts.idAttr) !== dragId);
+    });
+  });
+
+  container.addEventListener('drop', async e => {
+    e.preventDefault();
+    const fromId = dragId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
+    const target = e.target.closest(opts.itemSelector);
+    if (!fromId || !target) return;
+    const toId = target.getAttribute(opts.idAttr);
+    if (fromId === toId) return;
+
+    const items = [...container.querySelectorAll(opts.itemSelector)];
+    const fromEl = items.find(el => el.getAttribute(opts.idAttr) === fromId);
+    const toEl = items.find(el => el.getAttribute(opts.idAttr) === toId);
+    if (!fromEl || !toEl) return;
+
+    const fromIdx = items.indexOf(fromEl);
+    const toIdx = items.indexOf(toEl);
+    if (fromIdx < toIdx) toEl.after(fromEl);
+    else toEl.before(fromEl);
+
+    container.querySelectorAll('.gda-sort-drop-target').forEach(el => el.classList.remove('gda-sort-drop-target'));
+
+    const order = [...container.querySelectorAll(opts.itemSelector)].map(el => Number(el.getAttribute(opts.idAttr)));
+    try {
+      await opts.onReorder(order);
+      toast(tr('projects.toast.orderSaved'), 'ok');
+    } catch (err) {
+      toast(err.message || tr('projects.errGeneric'), 'err');
+      if (typeof opts.onError === 'function') opts.onError();
+    }
+  });
+
+  container.addEventListener('click', e => {
+    if (e.target.closest('.gda-drag-handle')) e.stopPropagation();
+  });
+}
+
+function bindProjectsTableSort(tbody) {
+  delete tbody.dataset.sortBound;
+  initSortableList(tbody, {
+    itemSelector: 'tr.sortable-project-row',
+    idAttr: 'data-project-id',
+    onReorder: async order => {
+      await apiFetch('/projects/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ order }),
+        skipProjectHeader: true,
+      });
+      const byId = new Map(cachedProjects.map(p => [Number(p.id), p]));
+      cachedProjects = order.map(id => byId.get(id)).filter(Boolean);
+    },
+    onError: () => refreshProjectList(),
+  });
+}
+
+function bindStructureTreeSort() {
+  const tree = document.getElementById('structure-tree');
+  if (!tree || !structureProjectId) return;
+  delete tree.dataset.sortBound;
+
+  initSortableList(tree, {
+    itemSelector: '.sortable-phase',
+    idAttr: 'data-phase-id',
+    onReorder: async order => {
+      await apiFetch(`/projects/${structureProjectId}/phases/reorder`, {
+        method: 'POST',
+        body: JSON.stringify({ order }),
+        projectContextId: structureProjectId,
+      });
+    },
+    onError: () => loadStructureTree(),
+  });
+
+  tree.querySelectorAll('.structure-sort-sub').forEach(list => {
+    const phaseId = list.closest('.sortable-phase')?.getAttribute('data-phase-id');
+    if (!phaseId) return;
+    delete list.dataset.sortBound;
+    initSortableList(list, {
+      itemSelector: '.sortable-subphase',
+      idAttr: 'data-sub-id',
+      onReorder: async order => {
+        await apiFetch(`/phases/${phaseId}/sub-phases/reorder`, {
+          method: 'POST',
+          body: JSON.stringify({ order }),
+          projectContextId: structureProjectId,
+        });
+      },
+      onError: () => loadStructureTree(),
+    });
+  });
+}
+
 function logoutOutsideClick(e) {
   const wrap = document.querySelector('.header-user-wrap');
   if (wrap && wrap.contains(e.target)) return;
@@ -575,7 +713,8 @@ function renderProjects(projects) {
     .map(p => {
       const isCur = cur && String(p.id) === String(cur);
       return `
-      <tr class="project-row" data-project-id="${p.id}" style="cursor:pointer">
+      <tr class="project-row sortable-project-row" data-project-id="${p.id}" style="cursor:pointer">
+        <td class="tbl-col-drag">${gripHandle()}</td>
         <td><strong>${escapeHtml(p.name)}</strong>${isCur ? ` <span style="color:var(--accent);font-size:11px">${escapeHtml(tr('projects.openBadge'))}</span>` : ''}</td>
         <td>${escapeHtml(p.status || '—')}</td>
         <td style="text-align:center;font-weight:700;color:var(--accent2)">${p.overall_progress ?? 0}%</td>
@@ -590,6 +729,8 @@ function renderProjects(projects) {
       </tr>`;
     })
     .join('');
+
+  bindProjectsTableSort(tbody);
 }
 
 async function loadStructureTree() {
@@ -640,19 +781,22 @@ async function loadStructureTree() {
       });
       stats.style.display = 'block';
     }
-    tree.innerHTML = phases
+    tree.innerHTML = `<div class="structure-sort-phases">${phases
       .map(
         ph => `
-      <div class="structure-phase-block" style="border-bottom:1px solid var(--border);padding:16px 0">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-          <strong style="font-size:15px;color:var(--accent2)">${escapeHtml(ph.name)}</strong>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="structure-phase-block sortable-phase" data-phase-id="${ph.id}" style="border-bottom:1px solid var(--border);padding:16px 0">
+        <div class="structure-phase-head structure-sort-row">
+          <div class="structure-row-label">
+            <strong style="font-size:15px;color:var(--accent2)">${escapeHtml(ph.name)}</strong>
+          </div>
+          <div class="structure-row-grip">${gripHandle()}</div>
+          <div class="structure-row-actions">
             <button type="button" class="btn btn-secondary btn-sm phase-edit-btn" data-phase-id="${ph.id}" data-name="${escapeAttr(ph.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
             <button type="button" class="btn btn-secondary btn-sm subphase-add-btn" data-phase-id="${ph.id}">${escapeHtml(tr('projects.subphaseAdd'))}</button>
             <button type="button" class="btn btn-secondary btn-sm phase-del-btn" data-phase-id="${ph.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">${escapeHtml(tr('projects.phaseDel'))}</button>
           </div>
         </div>
-        <ul style="margin:12px 0 0 0;padding:0 0 0 18px;list-style:none">
+        <ul class="structure-sort-sub">
           ${(ph.sub_phases || [])
             .map(sp => {
               const tasks = sp.tasks || [];
@@ -660,30 +804,35 @@ async function loadStructureTree() {
                 ? tasks
                     .map(
                       t => `
-            <li style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px dotted var(--border2)">
-              <div style="min-width:0">
-                <div>${escapeHtml(t.activity)}</div>
-                <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatTaskScheduleLabel(t.start_day, t.duration_days)}</div>
-              </div>
-              <div style="display:flex;gap:6px;flex-shrink:0">
-              <button type="button" class="btn btn-secondary btn-sm task-edit-btn" data-task-id="${t.id}" data-activity="${escapeAttr(t.activity)}" data-start-day="${t.start_day ?? 1}" data-duration-days="${t.duration_days ?? 1}" style="font-size:10px">${escapeHtml(tr('projects.btnEdit'))}</button>
-              <button type="button" class="btn btn-secondary btn-sm task-del-btn" data-task-id="${t.id}" style="font-size:10px;color:var(--danger)">${escapeHtml(tr('projects.btnDelete'))}</button>
+            <li data-task-id="${t.id}">
+              <div class="structure-task-row">
+                <div class="structure-row-label">
+                  <div>${escapeHtml(t.activity)}</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatTaskScheduleLabel(t.start_day, t.duration_days)}</div>
+                </div>
+                <div class="structure-row-actions">
+                  <button type="button" class="btn btn-secondary btn-sm task-edit-btn" data-task-id="${t.id}" data-activity="${escapeAttr(t.activity)}" data-start-day="${t.start_day ?? 1}" data-duration-days="${t.duration_days ?? 1}" style="font-size:10px">${escapeHtml(tr('projects.btnEdit'))}</button>
+                  <button type="button" class="btn btn-secondary btn-sm task-del-btn" data-task-id="${t.id}" style="font-size:10px;color:var(--danger)">${escapeHtml(tr('projects.btnDelete'))}</button>
+                </div>
               </div>
             </li>`
                     )
                     .join('')
                 : `<li style="color:var(--muted);font-size:12px;padding:6px 0">${escapeHtml(tr('projects.treeNoTasks'))}</li>`;
               return `
-            <li style="padding:10px 0;border-bottom:1px dashed var(--border2)">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-weight:600">${escapeHtml(sp.name)}</span>
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <li class="sortable-subphase" data-sub-id="${sp.id}">
+              <div class="structure-sub-head structure-sort-row">
+                <div class="structure-row-label">
+                  <span style="font-weight:600">${escapeHtml(sp.name)}</span>
+                </div>
+                <div class="structure-row-grip">${gripHandle()}</div>
+                <div class="structure-row-actions">
                   <button type="button" class="btn btn-secondary btn-sm subphase-edit-btn" data-sub-id="${sp.id}" data-name="${escapeAttr(sp.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
                   <button type="button" class="btn btn-secondary btn-sm task-add-btn" data-sub-id="${sp.id}">${escapeHtml(tr('projects.taskAdd'))}</button>
                   <button type="button" class="btn btn-secondary btn-sm subphase-del-btn" data-sub-id="${sp.id}" style="font-size:10px;color:var(--danger);flex-shrink:0">${escapeHtml(tr('projects.remove'))}</button>
                 </div>
               </div>
-              <ul style="margin:10px 0 0 14px;padding:0 0 0 12px;list-style:none;border-left:2px solid var(--border2)">${taskRows}</ul>
+              <ul class="structure-sort-task">${taskRows}</ul>
             </li>`;
             })
             .join('') ||
@@ -691,7 +840,8 @@ async function loadStructureTree() {
         </ul>
       </div>`
       )
-      .join('');
+      .join('')}</div>`;
+    bindStructureTreeSort();
   } catch (e) {
     loading.style.display = 'none';
     empty.style.display = 'block';

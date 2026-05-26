@@ -1400,7 +1400,7 @@ function syncReportActivityPhaseSelect(root = document) {
   sel.innerHTML =
     names
       .map(n => `<option value="${escapeHtmlAttr(n)}">${escapeHtml(n)}</option>`)
-      .join('') + `<option value="__all__">${escapeHtml(tr('dash.filterShowAll') || 'Toutes les phases')}${totalLabel}</option>`;
+      .join('') + `<option value="__all__">${escapeHtml(tr('dash.filterShowAll'))}${totalLabel}</option>`;
   if (reportActivityPhaseFilter === '__all__') sel.value = '__all__';
   else if (names.includes(reportActivityPhaseFilter)) sel.value = reportActivityPhaseFilter;
   else sel.value = names[0] || '__all__';
@@ -1756,7 +1756,7 @@ function syncDashboardActivityPhaseSelect() {
   sel.innerHTML =
     names
       .map(n => `<option value="${escapeHtmlAttr(n)}">${escapeHtml(n)}</option>`)
-      .join('') + `<option value="__all__">Toutes les phases${totalLabel}</option>`;
+      .join('') + `<option value="__all__">${escapeHtml(tr('dash.filterShowAll'))}${totalLabel}</option>`;
   if (dashboardActivityPhaseFilter === '__all__') sel.value = '__all__';
   else if (names.includes(dashboardActivityPhaseFilter)) sel.value = dashboardActivityPhaseFilter;
   else sel.value = names[0] || '__all__';
@@ -2100,7 +2100,7 @@ async function loadPhotosCategory(tab) {
   photoStore[tab] = (data.photos || []).map(p => ({
     id: p.id,
     path: p.path || '',
-    src: photoFileUrl(p.id, p.url),
+    src: photoFileUrl(p.id, p.url, p.path),
     date: p.taken_at ? new Date(p.taken_at).toLocaleDateString(gdaDateLocale()) : new Date(p.created_at).toLocaleDateString(gdaDateLocale()),
   }));
 }
@@ -2113,12 +2113,23 @@ function gdaAppRoot() {
   return (window.GDA_APP_URL || window.location.origin).replace(/\/$/, '');
 }
 
-/** URL d'affichage photo — construite côté navigateur (fiable en prod / sous-dossier). */
-function photoFileUrl(photoId, legacyUrl) {
+/**
+ * URL d'affichage photo.
+ * Priorité : /fichiers/… (public, fonctionne dans <img> sans token Bearer).
+ * Secours : /api/photos/{id}/file (session Sanctum ou token).
+ */
+function photoFileUrl(photoId, legacyUrl, storagePath) {
+  if (storagePath) {
+    return photoPublicFallbackUrl(storagePath);
+  }
+  const fromApi = normalizePhotoSrc(legacyUrl || '');
+  if (fromApi) {
+    return fromApi;
+  }
   if (photoId) {
     return gdaApiRoot() + '/photos/' + photoId + '/file';
   }
-  return normalizePhotoSrc(legacyUrl || '');
+  return '';
 }
 
 function photoPublicFallbackUrl(storagePath) {
@@ -2230,9 +2241,9 @@ function renderPhotos() {
 
 function photoThumb(p, i, tab, categoryLabel) {
   const src = escapeHtmlAttr(p.src);
-  const fallback = p.path ? escapeHtmlAttr(photoPublicFallbackUrl(p.path)) : '';
-  const onerr = fallback
-    ? ` onerror="if(this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}" data-fallback="${fallback}"`
+  const apiFallback = p.id ? escapeHtmlAttr(gdaApiRoot() + '/photos/' + p.id + '/file') : '';
+  const onerr = apiFallback
+    ? ` onerror="if(this.dataset.apiFallback && !this.dataset.triedApi){this.dataset.triedApi='1';this.src=this.dataset.apiFallback;}" data-api-fallback="${apiFallback}"`
     : '';
   return `<article class="photo-item" onclick="openLB('${tab}',${i})">
     <div class="photo-frame">
@@ -3106,6 +3117,8 @@ window.gdaOnUiLangChange = function gdaOnUiLangChange() {
       });
   }
   populatePhaseFilters();
+  syncDashboardActivityPhaseSelect();
+  syncReportActivityPhaseSelect();
   applyTasksSubtitleCount();
   syncTaskStatusCommentField();
   const active = document.querySelector('.page.active')?.id;

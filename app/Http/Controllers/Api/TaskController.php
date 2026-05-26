@@ -131,6 +131,7 @@ class TaskController extends Controller
             'activity' => ['sometimes', 'string', 'max:500'],
             'start_day' => ['sometimes', 'integer', 'min:1'],
             'duration_days' => ['sometimes', 'integer', 'min:1'],
+            'sort_order' => ['sometimes', 'integer', 'min:0'],
         ]);
 
         $task->update($data);

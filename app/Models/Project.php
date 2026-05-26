@@ -15,6 +15,7 @@ class Project extends Model
         'start_date',
         'end_date',
         'status',
+        'sort_order',
     ];
 
     protected function casts(): array
@@ -22,6 +23,7 @@ class Project extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
+            'sort_order' => 'integer',
         ];
     }
 

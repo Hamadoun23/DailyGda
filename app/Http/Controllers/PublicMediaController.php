@@ -18,7 +18,11 @@ class PublicMediaController extends Controller
         $path = str_replace(['\\', '..'], ['/', ''], $path);
         $path = ltrim($path, '/');
 
-        if ($path === '' || ! Storage::disk('public')->exists($path)) {
+        if ($path === '' || ! str_starts_with($path, 'photos/')) {
+            abort(404);
+        }
+
+        if (! Storage::disk('public')->exists($path)) {
             abort(404);
         }
 

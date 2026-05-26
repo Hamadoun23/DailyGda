@@ -50,8 +50,16 @@ class PhotoController extends Controller
 
     public function file(Request $request, Photo $photo): BinaryFileResponse
     {
-        $project = $this->resolveProject($request);
-        abort_unless((int) $photo->project_id === (int) $project->id, 404);
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $photo->loadMissing('project');
+        $project = $photo->project;
+        abort_unless($project, 404);
+
+        if (! $user->canViewAllProjects() && ! $user->projects()->whereKey($project->id)->exists()) {
+            abort(403, 'Accès non autorisé à ce projet.');
+        }
 
         $absolute = PhotoStorage::absolutePath($photo);
         abort_unless($absolute !== null && is_file($absolute), 404);

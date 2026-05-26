@@ -15,7 +15,7 @@ class ProjectController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $q = Project::query()->orderBy('id');
+        $q = Project::query()->orderBy('sort_order')->orderBy('id');
 
         if ($user && ! $user->canViewAllProjects()) {
             $q->whereHas('users', fn ($rel) => $rel->whereKey($user->id));
@@ -48,6 +48,7 @@ class ProjectController extends Controller
         ]);
 
         $data['status'] = $data['status'] ?? 'planifie';
+        $data['sort_order'] = (Project::query()->max('sort_order') ?? -1) + 1;
 
         $project = Project::create($data);
 
