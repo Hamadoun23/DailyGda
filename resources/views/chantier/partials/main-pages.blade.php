@@ -33,8 +33,8 @@
       <div id="phase-progress-list"></div>
     </div>
 
-    <!-- Recent activity -->
-    <div class="card">
+    <!-- Recent activity (admin uniquement) -->
+    <div class="card" data-hide-for-partner>
       <div class="card-head" data-i18n="dash.recentHead">Activité récente</div>
       <div id="recent-activity">
         <div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">

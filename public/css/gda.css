@@ -1712,6 +1712,31 @@ input[type=range]::-webkit-slider-thumb {
   color: var(--text);
 }
 
+.task-inline-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.task-inline-note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.task-inline-note-meta span:first-child {
+  color: var(--accent);
+}
+.task-inline-note-body {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
 /* Activity logs (admin) */
 .logs-filters-card { margin-bottom: 16px; }
 .logs-filters-row { align-items: end; }
@@ -2574,4 +2599,67 @@ body.sidebar-open {
 .structure-sort-task > li {
   padding: 6px 0;
   border-bottom: 1px dotted var(--border2);
+}
+.structure-partner-hidden {
+  opacity: 0.72;
+}
+.partner-hidden-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b4a12;
+  background: rgba(184, 124, 16, 0.14);
+  vertical-align: middle;
+}
+.partner-hidden-badge--inherited {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.partner-hide-btn,
+.partner-show-btn {
+  font-size: 10px !important;
+  padding: 6px 8px !important;
+}
+.partner-show-btn {
+  color: var(--ok);
+  border-color: rgba(26, 122, 66, 0.35);
+}
+.partner-hide-btn {
+  color: #6b4a12;
+  border-color: rgba(184, 124, 16, 0.35);
+}
+
+/* Admin : repère visuel éléments masqués chez le partenaire */
+.partner-visible-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6b4a12;
+  background: rgba(184, 124, 16, 0.14);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.row-partner-hidden,
+.daily-task-row.row-partner-hidden,
+tr.row-partner-hidden {
+  background: rgba(184, 124, 16, 0.06);
+}
+.dash-phase-row.row-partner-hidden {
+  padding: 4px 8px;
+  margin-left: -8px;
+  margin-right: -8px;
+  border-radius: 8px;
+  background: rgba(184, 124, 16, 0.06);
 }

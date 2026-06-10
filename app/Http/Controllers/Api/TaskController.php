@@ -8,6 +8,7 @@ use App\Models\SubPhase;
 use App\Models\Task;
 use App\Support\GdaLocale;
 use App\Support\GdaStatus;
+use App\Support\PartnerVisibility;
 use App\Support\ReportPresentation;
 use Illuminate\Http\Request;
 
@@ -23,6 +24,12 @@ class TaskController extends Controller
         $query = Task::query()
             ->forProject($project->id)
             ->with(['subPhase.phase', 'latestDailyUpdate']);
+
+        $forPartner = PartnerVisibility::filterForPartner($request->user());
+        if ($forPartner) {
+            PartnerVisibility::applyToTaskQuery($query);
+            $query->with(['progressNotes' => fn ($q) => $q->with('user')->limit(100)]);
+        }
 
         if ($request->filled('phase_id')) {
             $query->whereHas('subPhase', fn ($q) => $q->where('phase_id', (int) $request->query('phase_id')));
@@ -53,7 +60,7 @@ class TaskController extends Controller
             ->values();
 
         return response()->json([
-            'tasks' => $tasks->map(fn (Task $t) => $this->serializeTask($t, $presentation)),
+            'tasks' => $tasks->map(fn (Task $t) => $this->serializeTask($t, $presentation, $request->user())),
         ]);
     }
 
@@ -93,6 +100,9 @@ class TaskController extends Controller
     {
         $project = $this->resolveProject($request);
         abort_unless((int) $task->subPhase->phase->project_id === (int) $project->id, 404);
+        if (PartnerVisibility::filterForPartner($request->user()) && ! PartnerVisibility::isTaskVisibleToPartner($task)) {
+            abort(404);
+        }
 
         $task->load([
             'subPhase.phase',
@@ -116,9 +126,9 @@ class TaskController extends Controller
         ]);
 
         return response()->json([
-            'task' => $this->serializeTask($task, $presentation),
+            'task' => $this->serializeTask($task, $presentation, $request->user()),
             'daily_updates' => $history,
-            'progress_notes' => $this->serializeProgressNotes($task, $presentation),
+            'progress_notes' => $this->serializeProgressNotes($task, $presentation, $request->user()),
         ]);
     }
 
@@ -132,7 +142,12 @@ class TaskController extends Controller
             'start_day' => ['sometimes', 'integer', 'min:1'],
             'duration_days' => ['sometimes', 'integer', 'min:1'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
+            'hidden_from_partner' => ['sometimes', 'boolean'],
         ]);
+
+        if (array_key_exists('hidden_from_partner', $data)) {
+            abort_unless($request->user()?->canViewAllProjects(), 403, 'Réservé aux administrateurs.');
+        }
 
         $task->update($data);
         $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
@@ -154,7 +169,7 @@ class TaskController extends Controller
     /**
      * @return array<string, mixed>
      */
-    protected function serializeTask(Task $task, ReportPresentation $presentation): array
+    protected function serializeTask(Task $task, ReportPresentation $presentation, $viewer = null): array
     {
         $task->loadMissing('subPhase.phase');
         $latest = $task->latestDailyUpdate;
@@ -180,26 +195,37 @@ class TaskController extends Controller
             'progress_notes_count' => $task->relationLoaded('progressNotes')
                 ? $task->progressNotes->count()
                 : $task->progressNotes()->count(),
+            ...PartnerVisibility::taskVisibilityPayload($task),
+            ...($task->relationLoaded('progressNotes')
+                ? ['progress_notes' => $this->serializeProgressNotes($task, $presentation, $viewer)]
+                : []),
         ];
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    protected function serializeProgressNotes(Task $task, ReportPresentation $presentation): array
+    protected function serializeProgressNotes(Task $task, ReportPresentation $presentation, $viewer = null): array
     {
+        $forPartner = PartnerVisibility::filterForPartner($viewer);
         $notes = $task->relationLoaded('progressNotes')
             ? $task->progressNotes
             : $task->progressNotes()->with('user')->limit(100)->get();
 
-        return $notes->map(fn ($n) => [
-            'id' => $n->id,
-            'progress' => $n->progress,
-            'previous_progress' => $n->previous_progress,
-            'body' => $presentation->translate(trim($n->body), 'comments'),
-            'body_raw' => trim($n->body),
-            'user_name' => $n->user?->name,
-            'created_at' => $n->created_at?->format('d/m/Y H:i'),
-        ])->values()->all();
+        return $notes->map(function ($n) use ($presentation, $forPartner) {
+            $row = [
+                'id' => $n->id,
+                'progress' => $n->progress,
+                'previous_progress' => $n->previous_progress,
+                'body' => $presentation->translate(trim($n->body), 'comments'),
+                'body_raw' => trim($n->body),
+            ];
+            if (! $forPartner) {
+                $row['user_name'] = $n->user?->name;
+                $row['created_at'] = $n->created_at?->format('d/m/Y H:i');
+            }
+
+            return $row;
+        })->values()->all();
     }
 }

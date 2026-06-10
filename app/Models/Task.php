@@ -16,6 +16,7 @@ class Task extends Model
         'start_day',
         'duration_days',
         'sort_order',
+        'hidden_from_partner',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class Task extends Model
             'start_day' => 'integer',
             'duration_days' => 'integer',
             'sort_order' => 'integer',
+            'hidden_from_partner' => 'boolean',
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Support\GdaLocale;
 use App\Support\GdaStatus;
+use App\Support\PartnerVisibility;
 use App\Support\ReportPresentation;
 use App\Support\TaskProgressRecorder;
 use Illuminate\Http\Request;
@@ -51,6 +52,7 @@ class DailyUpdateController extends Controller
                     'activity' => $presentation->translate($task->activity, 'activities'),
                     'start_day' => $task->start_day,
                     'duration_days' => $task->duration_days,
+                    ...PartnerVisibility::taskVisibilityPayload($task),
                 ],
                 'daily_update' => $row ? [
                     'id' => $row->id,
@@ -124,6 +126,7 @@ class DailyUpdateController extends Controller
             ]
         );
 
+        TaskProgressRecorder::clearIfResetToZero($request->user(), $task, $newProgress);
         TaskProgressRecorder::recordIfAdvanced(
             $request->user(),
             $task,
@@ -180,6 +183,7 @@ class DailyUpdateController extends Controller
         $daily->user_id = $request->user()->id;
         $daily->save();
 
+        TaskProgressRecorder::clearIfResetToZero($request->user(), $task, $nextProgress);
         TaskProgressRecorder::recordIfAdvanced(
             $request->user(),
             $task,
@@ -241,6 +245,7 @@ class DailyUpdateController extends Controller
                     ]
                 );
 
+                TaskProgressRecorder::clearIfResetToZero($request->user(), $task, $newProgress);
                 TaskProgressRecorder::recordIfAdvanced(
                     $request->user(),
                     $task,

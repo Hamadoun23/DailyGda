@@ -12,12 +12,14 @@ class SubPhase extends Model
         'phase_id',
         'name',
         'sort_order',
+        'hidden_from_partner',
     ];
 
     protected function casts(): array
     {
         return [
             'sort_order' => 'integer',
+            'hidden_from_partner' => 'boolean',
         ];
     }
 

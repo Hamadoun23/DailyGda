@@ -29,14 +29,14 @@ class DashboardController extends Controller
         $project = $this->resolveProject($request);
         $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
 
-        return response()->json($this->dashboardPayload($project, $presentation));
+        return response()->json($this->dashboardPayload($project, $presentation, $request->user()));
     }
 
     public function export(Request $request): StreamedResponse
     {
         $project = $this->resolveProject($request);
         $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
-        $payload = $this->dashboardPayload($project, $presentation);
+        $payload = $this->dashboardPayload($project, $presentation, $request->user());
         $spreadsheet = $this->buildDashboardSpreadsheet($project, $payload, $presentation);
 
         $slug = Str::slug($project->name);
@@ -56,9 +56,9 @@ class DashboardController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function dashboardPayload(Project $project, ReportPresentation $presentation): array
+    private function dashboardPayload(Project $project, ReportPresentation $presentation, $user = null): array
     {
-        return ProjectStatistics::build($project, $presentation);
+        return ProjectStatistics::build($project, $presentation, $user);
     }
 
     /**

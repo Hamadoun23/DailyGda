@@ -45,7 +45,12 @@ class SubPhaseController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'hidden_from_partner' => ['sometimes', 'boolean'],
         ]);
+
+        if (array_key_exists('hidden_from_partner', $data)) {
+            abort_unless($request->user()?->canViewAllProjects(), 403, 'Réservé aux administrateurs.');
+        }
 
         $subPhase->update($data);
 

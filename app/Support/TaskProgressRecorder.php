@@ -39,6 +39,18 @@ final class TaskProgressRecorder
         }
     }
 
+    /**
+     * Remise à zéro : efface tout l’historique des justifications de la tâche.
+     */
+    public static function clearIfResetToZero(User $user, Task $task, int $newProgress): void
+    {
+        if (! $user->isAdmin() || $newProgress !== 0) {
+            return;
+        }
+
+        TaskProgressNote::query()->where('task_id', $task->id)->delete();
+    }
+
     public static function recordIfAdvanced(
         User $user,
         Task $task,

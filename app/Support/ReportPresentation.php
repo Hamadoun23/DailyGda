@@ -47,6 +47,7 @@ final class ReportPresentation
           'duration' => 'Duration',
           'status' => 'Status',
         ],
+        'partner_hidden' => 'Hidden from partner',
       ];
     }
 
@@ -54,6 +55,7 @@ final class ReportPresentation
       'progress_title' => 'Avancement',
       'report_title' => 'Rapport journalier de chantier',
       'overall_progress' => 'Avancement global du projet',
+      'partner_hidden' => 'Masqué partenaire',
       'date' => 'Date',
       'temperature' => 'Température',
       'weather' => 'Météo',

@@ -5,6 +5,8 @@ namespace App\Support;
 use App\Models\DailyUpdate;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
+use Illuminate\Support\Collection;
 
 final class ProjectStatistics
 {
@@ -13,25 +15,42 @@ final class ProjectStatistics
      *
      * @return array<string, mixed>
      */
-    public static function build(Project $project, ReportPresentation $presentation): array
+    public static function build(Project $project, ReportPresentation $presentation, ?User $user = null): array
     {
-        $tasks = Task::query()
-            ->forProject($project->id)
-            ->with(['latestDailyUpdate', 'subPhase.phase'])
-            ->get();
-
-        $overall = $project->overallProgress();
+        $forPartner = PartnerVisibility::filterForPartner($user);
+        $tasks = self::tasksForStats($project, $forPartner);
+        $overall = self::overallProgressFromTasks($tasks);
         $loc = $presentation->locale();
 
-        $progressByPhase = [];
-        foreach ($project->progressByPhase() as $phaseName => $pct) {
-            $count = $tasks->filter(fn (Task $t) => $t->subPhase->phase->name === $phaseName)->count();
-            $progressByPhase[] = [
-                'phase' => $presentation->translate($phaseName, 'phases'),
-                'progress' => $pct,
-                'task_count' => $count,
-            ];
-        }
+        $progressByPhase = $tasks
+            ->groupBy(fn (Task $t) => $t->subPhase->phase_id)
+            ->map(function (Collection $phaseTasks) use ($presentation, $forPartner) {
+                /** @var Task $sample */
+                $sample = $phaseTasks->first();
+                $sum = $phaseTasks->sum(fn (Task $t) => $t->latestDailyUpdate?->progress ?? 0);
+                $pct = $phaseTasks->isEmpty() ? 0 : (int) round($sum / $phaseTasks->count());
+
+                $row = [
+                    'phase_sort' => $sample->subPhase->phase->sort_order,
+                    'phase' => $presentation->translate($sample->subPhase->phase->name, 'phases'),
+                    'progress' => $pct,
+                    'task_count' => $phaseTasks->count(),
+                ];
+                if (! $forPartner) {
+                    $row['partner_hidden'] = (bool) $sample->subPhase->phase->hidden_from_partner;
+                }
+
+                return $row;
+            })
+            ->sortBy('phase_sort')
+            ->values()
+            ->map(fn (array $row) => [
+                'phase' => $row['phase'],
+                'progress' => $row['progress'],
+                'task_count' => $row['task_count'],
+                ...(! $forPartner ? ['partner_hidden' => (bool) ($row['partner_hidden'] ?? false)] : []),
+            ])
+            ->all();
 
         $done = $tasks->filter(fn (Task $t) => ($t->latestDailyUpdate?->status ?? 'non_demarre') === 'termine')->count();
         $inProgress = $tasks->filter(fn (Task $t) => ($t->latestDailyUpdate?->status ?? '') === 'en_cours')->count();
@@ -43,6 +62,9 @@ final class ProjectStatistics
             ->orderByDesc('updated_at')
             ->limit(150)
             ->get()
+            ->when($forPartner, fn (Collection $rows) => $rows->filter(
+                fn (DailyUpdate $u) => $u->task && PartnerVisibility::isTaskVisibleToPartner($u->task)
+            ))
             ->unique('task_id')
             ->take(5)
             ->map(function (DailyUpdate $u) use ($presentation, $loc) {
@@ -105,10 +127,10 @@ final class ProjectStatistics
                 $t->sort_order
             ))
             ->values()
-            ->map(function (Task $t) use ($presentation, $loc) {
+            ->map(function (Task $t) use ($presentation, $loc, $forPartner) {
                 $st = $t->latestDailyUpdate?->status ?? 'non_demarre';
 
-                return [
+                $row = [
                     'phase' => $presentation->translate($t->subPhase->phase->name, 'phases'),
                     'subphase' => $presentation->translate($t->subPhase->name, 'subphases'),
                     'activity' => $presentation->translate($t->activity, 'activities'),
@@ -116,6 +138,11 @@ final class ProjectStatistics
                     'status' => $st,
                     'status_label' => GdaStatus::label($st, $loc),
                 ];
+                if (! $forPartner) {
+                    $row['partner_hidden'] = ! PartnerVisibility::isTaskVisibleToPartner($t);
+                }
+
+                return $row;
             })
             ->all();
 
@@ -135,5 +162,35 @@ final class ProjectStatistics
                 'activities' => $activityRows,
             ],
         ];
+    }
+
+    /**
+     * @return Collection<int, Task>
+     */
+    private static function tasksForStats(Project $project, bool $forPartner): Collection
+    {
+        $query = Task::query()
+            ->forProject($project->id)
+            ->with(['latestDailyUpdate', 'subPhase.phase']);
+
+        if ($forPartner) {
+            PartnerVisibility::applyToTaskQuery($query);
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * @param  Collection<int, Task>  $tasks
+     */
+    private static function overallProgressFromTasks(Collection $tasks): int
+    {
+        if ($tasks->isEmpty()) {
+            return 0;
+        }
+
+        $sum = $tasks->sum(fn (Task $task) => $task->latestDailyUpdate?->progress ?? 0);
+
+        return (int) round($sum / $tasks->count());
     }
 }

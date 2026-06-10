@@ -159,7 +159,7 @@
     <div class="rp-header">
         <div class="rp-header-left">
             <div class="rp-brand">{{ $projectTitle }}</div>
-            <div class="rp-progress-line">{{ $copy['progress_title'] }} ({{ $report->overall_progress }}%)</div>
+            <div class="rp-progress-line">{{ $copy['progress_title'] }} ({{ $display_overall_progress ?? $statistics['overall_progress'] ?? $report->overall_progress }}%)</div>
             <div class="rp-title-orange">{{ $copy['report_title'] }}</div>
         </div>
         <div class="rp-header-right">
@@ -183,10 +183,24 @@
         </thead>
         <tbody>
         @foreach ($pdf_rows as $t)
-            <tr>
-                <td class="rp-phase-cell" style="border-right: 2px solid #d5cfc2;">{{ $t['phase'] }}</td>
-                <td style="font-weight: bold; color: #1a3a5c; font-size: 12px;">{{ $t['subphase'] }}</td>
-                <td>{{ $t['activity'] }}</td>
+            @php
+                $partnerHiddenRow = ! empty($show_admin_partner_markers) && ! empty($t['partner_hidden']);
+                $partnerMark = function (string $level, bool $when = true) use ($partnerHiddenRow, $t, $copy): string {
+                    if (! $partnerHiddenRow || ! $when || empty($t[$level])) {
+                        return '';
+                    }
+
+                    return ' <span style="font-size:9px;color:#8b4513;font-style:italic;">['.e($copy['partner_hidden'] ?? 'Masqué partenaire').']</span>';
+                };
+            @endphp
+            <tr @if ($partnerHiddenRow) style="background:#fff8f0;" @endif>
+                @if (! empty($t['show_phase_cell']))
+                    <td rowspan="{{ $t['phase_rowspan'] }}" class="rp-phase-cell" style="border-right: 2px solid #d5cfc2;">{!! e($t['phase']).$partnerMark('phase_hidden_from_partner') !!}</td>
+                @endif
+                @if (! empty($t['show_subphase_cell']))
+                    <td rowspan="{{ $t['subphase_rowspan'] }}" style="font-weight: bold; color: #1a3a5c; font-size: 12px;">{!! e($t['subphase']).$partnerMark('subphase_hidden_from_partner', empty($t['phase_hidden_from_partner'])) !!}</td>
+                @endif
+                <td>{!! e($t['activity']).$partnerMark('hidden_from_partner', empty($t['phase_hidden_from_partner']) && empty($t['subphase_hidden_from_partner'])) !!}</td>
                 <td style="text-align:center">{{ $t['start_label'] }}</td>
                 <td style="text-align:center">
                     <span class="bar-bg"><span class="bar-fill {{ ($t['progress'] ?? 0) >= 100 ? 'done' : '' }}" style="width: {{ min(100, (int) ($t['progress'] ?? 0)) }}%; display: block;"></span></span>
@@ -213,7 +227,7 @@
     </table>
 
     <div class="footer-band">{{ $copy['overall_progress'] }}</div>
-    <div class="footer-pct">{{ $report->overall_progress }}%</div>
+    <div class="footer-pct">{{ $display_overall_progress ?? $statistics['overall_progress'] ?? $report->overall_progress }}%</div>
     </div>
 
     @foreach ($pdfPhotoSections as $section)

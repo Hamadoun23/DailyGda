@@ -95,8 +95,30 @@ function normTask(row) {
     status_label: row.status_label,
     status_comment: row.status_comment || null,
     status_comment_display: row.status_comment_display ?? null,
+    hidden_from_partner: !!row.hidden_from_partner,
+    phase_hidden_from_partner: !!row.phase_hidden_from_partner,
+    subphase_hidden_from_partner: !!row.subphase_hidden_from_partner,
+    partner_hidden: !!row.partner_hidden,
+    progress_notes: row.progress_notes || [],
     comments: [],
   };
+}
+
+/** Badge admin : élément masqué pour les partenaires (tâche / sous-phase / phase). */
+function adminPartnerHiddenChip(taskOrRow) {
+  if (window.GDA_IS_PARTNER) return '';
+  const t = taskOrRow || {};
+  if (!t.partner_hidden) return '';
+  let label = tr('ui.partnerHidden');
+  if (t.phase_hidden_from_partner) label = tr('ui.partnerHiddenPhase');
+  else if (t.subphase_hidden_from_partner) label = tr('ui.partnerHiddenSubphase');
+  else if (t.hidden_from_partner) label = tr('ui.partnerHiddenTask');
+  return `<span class="partner-visible-chip" title="${escapeHtmlAttr(tr('ui.partnerHiddenHint'))}">${escapeHtml(label)}</span>`;
+}
+
+function adminPartnerHiddenRowClass(taskOrRow) {
+  if (window.GDA_IS_PARTNER) return '';
+  return taskOrRow?.partner_hidden ? ' row-partner-hidden' : '';
 }
 
 function statusBadgeFromSlug(slug) {
@@ -175,14 +197,15 @@ function renderProgressNotesHistory(notes) {
     el.innerHTML = `<div class="progress-notes-empty">${escapeHtml(tr('modal.progressHistoryEmpty'))}</div>`;
     return;
   }
+  const partnerView = !!window.GDA_IS_PARTNER;
   el.innerHTML = notes
     .map(
       (n) => `<div class="progress-note-item">
-        <div class="progress-note-meta">
+        ${partnerView ? '' : `<div class="progress-note-meta">
           <span class="progress-note-pct">${n.previous_progress}% → ${n.progress}%</span>
           <span class="progress-note-date">${escapeHtml(n.created_at || '')}</span>
           ${n.user_name ? `<span class="progress-note-user">${escapeHtml(n.user_name)}</span>` : ''}
-        </div>
+        </div>`}
         <div class="progress-note-body">${escapeHtml(n.body || n.body_raw || '')}</div>
       </div>`,
     )
@@ -202,6 +225,8 @@ function applyModalReadOnly(readOnly) {
   });
   const commentWrap = document.getElementById('m-comment-wrap');
   if (commentWrap) commentWrap.style.display = readOnly ? 'none' : '';
+  const historyWrap = document.getElementById('m-notes-history-wrap');
+  if (historyWrap) historyWrap.style.display = '';
 }
 
 function deriveStatusFromProgress(p) {
@@ -1643,7 +1668,9 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
 
   if (barActEl && allActs.length && filteredActs.length) {
     const acts = filteredActs;
-    const fullLabels = acts.map(a => `${a.subphase} — ${a.activity}`);
+    const hiddenMark = a =>
+      !window.GDA_IS_PARTNER && a.partner_hidden ? ` [${tr('ui.partnerHiddenShort')}]` : '';
+    const fullLabels = acts.map(a => `${a.subphase} — ${a.activity}${hiddenMark(a)}`);
     const labels = fullLabels.map(s => (String(s).length > 48 ? `${String(s).slice(0, 46)}…` : s));
     const barColor = a => {
       if (a.status === 'annule') return '#c01a1a';
@@ -1784,14 +1811,19 @@ function renderDashboard() {
   container.innerHTML = phases.map(p => {
     const pct = p.progress;
     const cls = pct === 100 ? 'fill-done' : pct > 0 ? 'fill-low' : 'fill-0';
-    return `<div style="display:grid;grid-template-columns:180px 1fr 50px;align-items:center;gap:14px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;color:var(--text)">${p.phase}</div>
+    const phaseChip = !window.GDA_IS_PARTNER && p.partner_hidden
+      ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true })
+      : '';
+    const phaseRowCls = !window.GDA_IS_PARTNER && p.partner_hidden ? ' row-partner-hidden' : '';
+    return `<div class="dash-phase-row${phaseRowCls}" style="display:grid;grid-template-columns:180px 1fr 50px;align-items:center;gap:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text)">${p.phase} ${phaseChip}</div>
       <div class="pbar"><div class="pbar-fill ${cls}" style="width:${pct}%"></div></div>
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:${pct === 100 ? 'var(--ok)' : 'var(--accent)'}">${pct}%</div>
     </div>`;
   }).join('');
 
   const ra = document.getElementById('recent-activity');
+  if (ra && !window.GDA_IS_PARTNER) {
   const items = dashboardData.recent_activity || [];
   if (!items.length) {
     ra.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">' + escapeHtml(tr('dash.recentNone')) + '</div>';
@@ -1805,6 +1837,7 @@ function renderDashboard() {
         </div>
         <div style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--accent)">${a.progress}%</div>
       </div>`).join('');
+  }
   }
   renderDashboardCharts();
 }
@@ -1882,9 +1915,9 @@ function renderDaily() {
     const prog = displayProgress(t.id);
     const stSlug = displayStatusSlug(t.id);
     const pctClass = prog === 100 ? 'fill-done' : prog > 0 ? 'fill-low' : 'fill-0';
-    return `<div class="daily-task-row" id="drow-${t.id}" onclick="openModal(${t.id})">
+    return `<div class="daily-task-row${adminPartnerHiddenRowClass(t)}" id="drow-${t.id}" onclick="openModal(${t.id})">
       <div>
-        <div class="task-name">${escapeHtml(t.subphase)} — ${escapeHtml(t.activity)}</div>
+        <div class="task-name">${escapeHtml(t.subphase)} — ${escapeHtml(t.activity)} ${adminPartnerHiddenChip(t)}</div>
         <div class="task-phase">${escapeHtml(t.phase)}</div>
       </div>
       <div>${renderStatusCell(t.id, stSlug)}</div>
@@ -1977,13 +2010,17 @@ async function openModal(id) {
     };
   }
   applyModalReadOnly(readOnly);
-  renderProgressNotesHistory([]);
+  modalProgressNotes = t.progress_notes || [];
+  renderProgressNotesHistory(modalProgressNotes);
   try {
     const data = await apiFetch('/tasks/' + id);
     modalProgressNotes = data.progress_notes || [];
     renderProgressNotesHistory(modalProgressNotes);
+    if (readOnly && tasks.find(x => x.id === id)) {
+      tasks.find(x => x.id === id).progress_notes = modalProgressNotes;
+    }
   } catch (_) {
-    modalProgressNotes = [];
+    if (!modalProgressNotes.length) renderProgressNotesHistory([]);
   }
   syncTaskStatusCommentField();
   document.getElementById('modal-task').classList.add('open');
@@ -2066,16 +2103,17 @@ function renderAllTasks() {
   phases.forEach(ph => {
     const pt = filtered.filter(t => t.phase === ph);
     const phasePct = phaseProgress(ph);
-    html += `<tr class="phase-row">
-      <td colspan="7">${escapeHtml(ph)}
+    const phaseHidden = pt.some(t => t.phase_hidden_from_partner);
+    html += `<tr class="phase-row${phaseHidden ? ' row-partner-hidden' : ''}">
+      <td colspan="7">${escapeHtml(ph)} ${phaseHidden ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true }) : ''}
         <span style="margin-left:12px;font-weight:400;color:var(--muted)">${phasePct}% ${escapeHtml(tr('tasks.phaseDone'))}</span>
       </td>
     </tr>`;
     pt.forEach(t => {
       const pctCls = t.progress === 100 ? 'fill-done' : t.progress > 50 ? 'fill-mid' : t.progress > 0 ? 'fill-low' : 'fill-0';
-      html += `<tr>
+      html += `<tr class="${adminPartnerHiddenRowClass(t).trim()}">
         <td><div style="font-weight:600;font-size:12px">${escapeHtml(t.subphase)}</div></td>
-        <td style="font-size:12px">${escapeHtml(t.activity)}</td>
+        <td style="font-size:12px">${escapeHtml(t.activity)} ${adminPartnerHiddenChip(t)}</td>
         <td style="font-size:12px;color:var(--muted)">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
         <td style="font-size:12px;color:var(--muted)">${t.duration}j</td>
         <td>
@@ -2822,11 +2860,21 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
     const statusNote = t.status === 'annule' && cancelComment
       ? `<span class="rp-status-note">${escapeHtml(cancelComment)}</span>`
       : '';
+    const rowCls = adminPartnerHiddenRowClass(t);
+    const phaseChip = showP && t.phase_hidden_from_partner
+      ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true })
+      : '';
+    const subChip = showS && t.subphase_hidden_from_partner && !t.phase_hidden_from_partner
+      ? adminPartnerHiddenChip({ partner_hidden: true, subphase_hidden_from_partner: true })
+      : '';
+    const taskChip = t.hidden_from_partner && !t.subphase_hidden_from_partner && !t.phase_hidden_from_partner
+      ? adminPartnerHiddenChip({ partner_hidden: true, hidden_from_partner: true })
+      : '';
     return `
-      <tr>
-        ${showP ? `<td rowspan="${phaseCounts[t.phase]}" class="rp-phase-cell">${escapeHtml(reportPhaseLabel(t, lang))}</td>` : ''}
-        ${showS ? `<td rowspan="${subKeyCounts[sk]}" style="font-weight:600;color:#1a3a5c">${escapeHtml(reportSubphaseLabel(t, lang))}</td>` : ''}
-        <td>${escapeHtml(reportActivityLabel(t, lang))}</td>
+      <tr class="${rowCls.trim()}">
+        ${showP ? `<td rowspan="${phaseCounts[t.phase]}" class="rp-phase-cell">${escapeHtml(reportPhaseLabel(t, lang))}${phaseChip}</td>` : ''}
+        ${showS ? `<td rowspan="${subKeyCounts[sk]}" style="font-weight:600;color:#1a3a5c">${escapeHtml(reportSubphaseLabel(t, lang))}${subChip}</td>` : ''}
+        <td>${escapeHtml(reportActivityLabel(t, lang))}${taskChip}</td>
         <td style="text-align:center">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
         <td style="text-align:center">
           <div style="display:flex;align-items:center;justify-content:center;gap:6px">

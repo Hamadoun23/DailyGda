@@ -45,11 +45,13 @@ class PhaseController extends Controller
                 'project_id' => $phase->project_id,
                 'name' => $presentation->translate($phase->name, 'phases'),
                 'sort_order' => $phase->sort_order,
+                'hidden_from_partner' => (bool) $phase->hidden_from_partner,
                 'sub_phases' => $phase->subPhases->map(fn ($sp) => [
                     'id' => $sp->id,
                     'phase_id' => $sp->phase_id,
                     'name' => $presentation->translate($sp->name, 'subphases'),
                     'sort_order' => $sp->sort_order,
+                    'hidden_from_partner' => (bool) $sp->hidden_from_partner,
                     'tasks' => $sp->tasks->map(fn (Task $t) => [
                         'id' => $t->id,
                         'sub_phase_id' => $t->sub_phase_id,
@@ -57,6 +59,7 @@ class PhaseController extends Controller
                         'start_day' => $t->start_day,
                         'duration_days' => $t->duration_days,
                         'sort_order' => $t->sort_order,
+                        'hidden_from_partner' => (bool) $t->hidden_from_partner,
                     ]),
                 ]),
             ]),
@@ -96,7 +99,12 @@ class PhaseController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'hidden_from_partner' => ['sometimes', 'boolean'],
         ]);
+
+        if (array_key_exists('hidden_from_partner', $data)) {
+            abort_unless($request->user()?->canViewAllProjects(), 403, 'Réservé aux administrateurs.');
+        }
 
         $phase->update($data);
 

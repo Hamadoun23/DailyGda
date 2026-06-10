@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Support\GdaLocale;
 use App\Support\GdaStatus;
 use App\Support\PdfImageEncoder;
+use App\Support\PartnerVisibility;
 use App\Support\ProjectStatistics;
 use App\Support\ReportChartStorage;
 use App\Support\ReportPresentation;
@@ -67,7 +68,10 @@ class ReportController extends Controller
             'chart_images.act' => ['nullable', 'string', 'max:12000000'],
         ]);
 
-        $overall = $project->overallProgress();
+        $forPartner = PartnerVisibility::filterForPartner($request->user());
+        $overall = $forPartner
+            ? ProjectStatistics::build($project, ReportPresentation::forLocale(GdaLocale::fromRequest($request)), $request->user())['overall_progress']
+            : $project->overallProgress();
 
         $report = Report::create([
             'project_id' => $project->id,
@@ -88,7 +92,7 @@ class ReportController extends Controller
         }
 
         $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
-        $tasks = $this->tasksForPdfCollection($project)
+        $tasks = $this->tasksForPdfCollection($project, $request->user())
             ->map(fn (array $row) => $this->localizeTaskRowForApi($row, $presentation))
             ->values()
             ->all();
@@ -103,7 +107,7 @@ class ReportController extends Controller
                 'overall_progress' => $report->overall_progress,
                 'notes' => $report->notes,
             ],
-            'statistics' => ProjectStatistics::build($project, $presentation),
+            'statistics' => ProjectStatistics::build($project, $presentation, $request->user()),
             'tasks' => $tasks,
         ], 201);
     }
@@ -117,18 +121,26 @@ class ReportController extends Controller
             ? (string) $request->query('locale', 'fr')
             : GdaLocale::fromRequest($request);
         $presentation = ReportPresentation::forLocale($locale);
-        $statistics = ProjectStatistics::build($project, $presentation);
+        $forPartner = PartnerVisibility::filterForPartner($request->user());
+        $statistics = ProjectStatistics::build($project, $presentation, $request->user());
+        $displayOverallProgress = (int) ($statistics['overall_progress'] ?? $report->overall_progress);
         $chartImages = ReportChartStorage::loadForPdf($report->id);
         if ($chartImages === []) {
             $chartImages = Cache::get('report_pdf_charts:'.$report->id, []);
         }
-        $pdfRows = $this->buildPdfRows($project, $presentation);
+        // Graphiques figés à la génération (souvent admin) : ne pas les montrer au partenaire.
+        if ($forPartner) {
+            $chartImages = [];
+        }
+        $pdfRows = $this->buildPdfRows($project, $presentation, $request->user());
         $pdfPhotoSections = $this->buildPdfPhotoSections($project, $presentation);
 
         $pdf = Pdf::loadView('reports.pdf', [
             'project' => $project,
             'report' => $report,
             'statistics' => $statistics,
+            'display_overall_progress' => $displayOverallProgress,
+            'show_admin_partner_markers' => ! $forPartner,
             'chartImages' => $chartImages,
             'pdf_rows' => $pdfRows,
             'pdfPhotoSections' => $pdfPhotoSections,
@@ -153,31 +165,36 @@ class ReportController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    protected function tasksForPdf(Project $project): array
+    protected function tasksForPdf(Project $project, $user = null): array
     {
-        return $this->tasksForPdfCollection($project)->values()->all();
+        return $this->tasksForPdfCollection($project, $user)->values()->all();
     }
 
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function tasksForPdfCollection(Project $project): Collection
+    protected function tasksForPdfCollection(Project $project, $user = null): Collection
     {
-        return Task::query()
+        $query = Task::query()
             ->forProject($project->id)
-            ->with(['subPhase.phase', 'latestDailyUpdate'])
-            ->get()
+            ->with(['subPhase.phase', 'latestDailyUpdate']);
+
+        if (PartnerVisibility::filterForPartner($user)) {
+            PartnerVisibility::applyToTaskQuery($query);
+        }
+
+        return $query->get()
             ->sortBy([
                 fn (Task $a, Task $b) => $a->subPhase->phase->sort_order <=> $b->subPhase->phase->sort_order,
                 fn (Task $a, Task $b) => $a->subPhase->sort_order <=> $b->subPhase->sort_order,
                 fn (Task $a, Task $b) => $a->sort_order <=> $b->sort_order,
             ])
             ->values()
-            ->map(function (Task $task) {
+            ->map(function (Task $task) use ($user) {
                 $latest = $task->latestDailyUpdate;
                 $status = $latest?->status ?? 'non_demarre';
 
-                return [
+                $row = [
                     'phase' => $task->subPhase->phase->name,
                     'phase_sort' => $task->subPhase->phase->sort_order,
                     'subphase' => $task->subPhase->name,
@@ -191,16 +208,22 @@ class ReportController extends Controller
                     'status_label' => GdaStatus::labelFr($status),
                     'status_comment' => $status === 'annule' ? $latest?->comment : null,
                 ];
+
+                if (! PartnerVisibility::filterForPartner($user)) {
+                    $row = array_merge($row, PartnerVisibility::taskVisibilityPayload($task));
+                }
+
+                return $row;
             });
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    protected function buildPdfRows(Project $project, ?ReportPresentation $presentation = null): array
+    protected function buildPdfRows(Project $project, ?ReportPresentation $presentation = null, $user = null): array
     {
         $presentation ??= ReportPresentation::forLocale('fr');
-        $sorted = $this->tasksForPdfCollection($project)->sortBy([
+        $sorted = $this->tasksForPdfCollection($project, $user)->sortBy([
             fn (array $a, array $b) => $a['phase_sort'] <=> $b['phase_sort'],
             fn (array $a, array $b) => $a['subphase_sort'] <=> $b['subphase_sort'],
             fn (array $a, array $b) => $a['sort_order'] <=> $b['sort_order'],

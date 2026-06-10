@@ -108,6 +108,36 @@ function gripHandle() {
   return `<span class="gda-drag-handle" draggable="true" role="button" aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}"><i></i><i></i><i></i><i></i><i></i><i></i></span>`;
 }
 
+function partnerHiddenBadge() {
+  return `<span class="partner-hidden-badge">${escapeHtml(tr('projects.partnerHidden'))}</span>`;
+}
+
+function partnerVisibilityBtn(entity, id, hidden, inherited) {
+  if (inherited) {
+    return `<span class="partner-hidden-badge partner-hidden-badge--inherited" title="${escapeAttr(tr('projects.partnerHiddenInherited'))}">${escapeHtml(tr('projects.partnerHiddenInherited'))}</span>`;
+  }
+  const label = hidden ? tr('projects.partnerShow') : tr('projects.partnerHide');
+  const cls = hidden ? 'partner-show-btn' : 'partner-hide-btn';
+  return `<button type="button" class="btn btn-secondary btn-sm ${cls}" data-entity="${escapeAttr(entity)}" data-id="${id}" data-hidden="${hidden ? '1' : '0'}">${escapeHtml(label)}</button>`;
+}
+
+async function togglePartnerVisibility(entity, id, hide) {
+  const paths = {
+    phase: `/phases/${id}`,
+    subphase: `/sub-phases/${id}`,
+    task: `/tasks/${id}`,
+  };
+  const path = paths[entity];
+  if (!path || !structureProjectId) return;
+  await apiFetch(path, {
+    method: 'PUT',
+    body: JSON.stringify({ hidden_from_partner: hide }),
+    projectContextId: structureProjectId,
+  });
+  toast(tr('projects.toast.partnerVisibility'), 'ok');
+  await loadStructureTree();
+}
+
 /**
  * Liste réordonnable par glisser-déposer (poignée uniquement).
  * @param {HTMLElement} container
@@ -784,13 +814,15 @@ async function loadStructureTree() {
     tree.innerHTML = `<div class="structure-sort-phases">${phases
       .map(
         ph => `
-      <div class="structure-phase-block sortable-phase" data-phase-id="${ph.id}" style="border-bottom:1px solid var(--border);padding:16px 0">
+      <div class="structure-phase-block sortable-phase${ph.hidden_from_partner ? ' structure-partner-hidden' : ''}" data-phase-id="${ph.id}" style="border-bottom:1px solid var(--border);padding:16px 0">
         <div class="structure-phase-head structure-sort-row">
           <div class="structure-row-label">
             <strong style="font-size:15px;color:var(--accent2)">${escapeHtml(ph.name)}</strong>
+            ${ph.hidden_from_partner ? partnerHiddenBadge() : ''}
           </div>
           <div class="structure-row-grip">${gripHandle()}</div>
           <div class="structure-row-actions">
+            ${partnerVisibilityBtn('phase', ph.id, !!ph.hidden_from_partner, false)}
             <button type="button" class="btn btn-secondary btn-sm phase-edit-btn" data-phase-id="${ph.id}" data-name="${escapeAttr(ph.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
             <button type="button" class="btn btn-secondary btn-sm subphase-add-btn" data-phase-id="${ph.id}">${escapeHtml(tr('projects.subphaseAdd'))}</button>
             <button type="button" class="btn btn-secondary btn-sm phase-del-btn" data-phase-id="${ph.id}" style="color:var(--danger);border-color:rgba(192,26,26,.35)">${escapeHtml(tr('projects.phaseDel'))}</button>
@@ -804,13 +836,14 @@ async function loadStructureTree() {
                 ? tasks
                     .map(
                       t => `
-            <li data-task-id="${t.id}">
+            <li data-task-id="${t.id}" class="${ph.hidden_from_partner || sp.hidden_from_partner || t.hidden_from_partner ? 'structure-partner-hidden' : ''}">
               <div class="structure-task-row">
                 <div class="structure-row-label">
                   <div>${escapeHtml(t.activity)}</div>
                   <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatTaskScheduleLabel(t.start_day, t.duration_days)}</div>
                 </div>
                 <div class="structure-row-actions">
+                  ${partnerVisibilityBtn('task', t.id, !!t.hidden_from_partner, !!(ph.hidden_from_partner || sp.hidden_from_partner))}
                   <button type="button" class="btn btn-secondary btn-sm task-edit-btn" data-task-id="${t.id}" data-activity="${escapeAttr(t.activity)}" data-start-day="${t.start_day ?? 1}" data-duration-days="${t.duration_days ?? 1}" style="font-size:10px">${escapeHtml(tr('projects.btnEdit'))}</button>
                   <button type="button" class="btn btn-secondary btn-sm task-del-btn" data-task-id="${t.id}" style="font-size:10px;color:var(--danger)">${escapeHtml(tr('projects.btnDelete'))}</button>
                 </div>
@@ -820,13 +853,15 @@ async function loadStructureTree() {
                     .join('')
                 : `<li style="color:var(--muted);font-size:12px;padding:6px 0">${escapeHtml(tr('projects.treeNoTasks'))}</li>`;
               return `
-            <li class="sortable-subphase" data-sub-id="${sp.id}">
+            <li class="sortable-subphase${ph.hidden_from_partner || sp.hidden_from_partner ? ' structure-partner-hidden' : ''}" data-sub-id="${sp.id}">
               <div class="structure-sub-head structure-sort-row">
                 <div class="structure-row-label">
                   <span style="font-weight:600">${escapeHtml(sp.name)}</span>
+                  ${sp.hidden_from_partner && !ph.hidden_from_partner ? partnerHiddenBadge() : ''}
                 </div>
                 <div class="structure-row-grip">${gripHandle()}</div>
                 <div class="structure-row-actions">
+                  ${partnerVisibilityBtn('subphase', sp.id, !!sp.hidden_from_partner, !!ph.hidden_from_partner)}
                   <button type="button" class="btn btn-secondary btn-sm subphase-edit-btn" data-sub-id="${sp.id}" data-name="${escapeAttr(sp.name)}">${escapeHtml(tr('projects.btnEdit'))}</button>
                   <button type="button" class="btn btn-secondary btn-sm task-add-btn" data-sub-id="${sp.id}">${escapeHtml(tr('projects.taskAdd'))}</button>
                   <button type="button" class="btn btn-secondary btn-sm subphase-del-btn" data-sub-id="${sp.id}" style="font-size:10px;color:var(--danger);flex-shrink:0">${escapeHtml(tr('projects.remove'))}</button>
@@ -923,6 +958,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('structure-tree')?.addEventListener('click', e => {
+    const partnerToggle = e.target.closest('.partner-hide-btn, .partner-show-btn');
+    if (partnerToggle && structureProjectId) {
+      e.stopPropagation();
+      const entity = partnerToggle.getAttribute('data-entity');
+      const id = Number(partnerToggle.getAttribute('data-id'));
+      const hide = partnerToggle.getAttribute('data-hidden') !== '1';
+      void togglePartnerVisibility(entity, id, hide).catch(err => {
+        toast(err.message || tr('projects.errGeneric'), 'err');
+      });
+      return;
+    }
+
     const phaseEdit = e.target.closest('.phase-edit-btn');
     if (phaseEdit && structureProjectId) {
       openStructureEditor({
