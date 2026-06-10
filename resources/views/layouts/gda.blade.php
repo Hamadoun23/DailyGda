@@ -14,6 +14,7 @@
         $gdaAssetVer = (string) max(
             @filemtime(public_path('css/gda.css')) ?: 0,
             @filemtime(public_path('js/gda-app.js')) ?: 0,
+            @filemtime(public_path('js/gda-projects.js')) ?: 0,
             @filemtime(public_path('js/gda-i18n.js')) ?: 0,
             @filemtime(public_path('js/gda-pwa.js')) ?: 0,
             @filemtime(public_path('img/inavbar.png')) ?: 0,

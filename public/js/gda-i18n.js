@@ -773,10 +773,26 @@ function gdaDateLocale() {
   return gdaUiLang() === 'en' ? 'en-GB' : 'fr-FR';
 }
 
+/** Repli FR si clé absente (cache navigateur / SW obsolète). */
+const GDA_I18N_FALLBACK_FR = {
+  'projects.partnerHide': 'Masquer partenaire',
+  'projects.partnerShow': 'Afficher partenaire',
+  'projects.partnerHidden': 'Masqué partenaire',
+  'projects.partnerHiddenInherited': 'Masqué (parent)',
+  'ui.partnerHidden': 'Masqué partenaire',
+  'ui.partnerHiddenShort': 'masqué partenaire',
+  'ui.partnerHiddenPhase': 'Phase masquée partenaire',
+  'ui.partnerHiddenSubphase': 'Sous-phase masquée partenaire',
+  'ui.partnerHiddenTask': 'Activité masquée partenaire',
+  'ui.partnerHiddenHint': 'Invisible pour les comptes partenaires',
+};
+
 function tr(key) {
   const lang = gdaUiLang();
   const t = GDA_I18N[lang]?.[key] ?? GDA_I18N.fr[key];
-  return t != null ? t : key;
+  if (t != null) return t;
+  if (lang !== 'en' && GDA_I18N_FALLBACK_FR[key]) return GDA_I18N_FALLBACK_FR[key];
+  return key;
 }
 
 function trTpl(key, vars) {

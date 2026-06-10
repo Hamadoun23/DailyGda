@@ -87,6 +87,6 @@
   window.GDA_AUTH_REQUIRED = true;
   window.GDA_IS_PARTNER = false;
 </script>
-<script src="{{ asset('js/gda-i18n.js') }}"></script>
-<script src="{{ asset('js/gda-projects.js') }}"></script>
+<script src="{{ asset('js/gda-i18n.js') }}?v={{ $gdaAssetVer ?? 1 }}"></script>
+<script src="{{ asset('js/gda-projects.js') }}?v={{ $gdaAssetVer ?? 1 }}"></script>
 @endpush

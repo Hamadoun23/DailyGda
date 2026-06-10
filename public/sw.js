@@ -1,9 +1,11 @@
 /* Service worker GDA — assets statiques uniquement (pas de pages HTML / redirections) */
-const CACHE = 'gda-pwa-v2';
+const CACHE = 'gda-pwa-v3';
 
 const ASSETS = [
   '/css/gda.css',
   '/js/gda-i18n.js',
+  '/js/gda-app.js',
+  '/js/gda-projects.js',
   '/js/gda-pwa.js',
   '/img/Constfondblanc.jpg',
   '/img/GDACONST.png',

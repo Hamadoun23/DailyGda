@@ -839,7 +839,7 @@ async function loadStructureTree() {
             <li data-task-id="${t.id}" class="${ph.hidden_from_partner || sp.hidden_from_partner || t.hidden_from_partner ? 'structure-partner-hidden' : ''}">
               <div class="structure-task-row">
                 <div class="structure-row-label">
-                  <div>${escapeHtml(t.activity)}</div>
+                  <div>${escapeHtml(t.activity)}${t.hidden_from_partner && !ph.hidden_from_partner && !sp.hidden_from_partner ? ' ' + partnerHiddenBadge() : ''}</div>
                   <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatTaskScheduleLabel(t.start_day, t.duration_days)}</div>
                 </div>
                 <div class="structure-row-actions">

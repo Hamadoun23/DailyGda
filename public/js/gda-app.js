@@ -2104,15 +2104,20 @@ function renderAllTasks() {
     const pt = filtered.filter(t => t.phase === ph);
     const phasePct = phaseProgress(ph);
     const phaseHidden = pt.some(t => t.phase_hidden_from_partner);
-    html += `<tr class="phase-row${phaseHidden ? ' row-partner-hidden' : ''}">
+    const anyPartnerHidden = pt.some(t => t.partner_hidden);
+    html += `<tr class="phase-row${anyPartnerHidden ? ' row-partner-hidden' : ''}">
       <td colspan="7">${escapeHtml(ph)} ${phaseHidden ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true }) : ''}
         <span style="margin-left:12px;font-weight:400;color:var(--muted)">${phasePct}% ${escapeHtml(tr('tasks.phaseDone'))}</span>
       </td>
     </tr>`;
     pt.forEach(t => {
       const pctCls = t.progress === 100 ? 'fill-done' : t.progress > 50 ? 'fill-mid' : t.progress > 0 ? 'fill-low' : 'fill-0';
+      const subChip =
+        t.subphase_hidden_from_partner && !t.phase_hidden_from_partner
+          ? adminPartnerHiddenChip({ partner_hidden: true, subphase_hidden_from_partner: true })
+          : '';
       html += `<tr class="${adminPartnerHiddenRowClass(t).trim()}">
-        <td><div style="font-weight:600;font-size:12px">${escapeHtml(t.subphase)}</div></td>
+        <td><div style="font-weight:600;font-size:12px">${escapeHtml(t.subphase)}${subChip}</div></td>
         <td style="font-size:12px">${escapeHtml(t.activity)} ${adminPartnerHiddenChip(t)}</td>
         <td style="font-size:12px;color:var(--muted)">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
         <td style="font-size:12px;color:var(--muted)">${t.duration}j</td>
