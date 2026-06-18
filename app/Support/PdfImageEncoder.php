@@ -5,7 +5,7 @@ namespace App\Support;
 final class PdfImageEncoder
 {
     /**
-     * Image optimisée pour DomPDF : redimensionnement raisonnable + JPEG haute qualité.
+     * Image optimisée pour le PDF (redimensionnement raisonnable + JPEG haute qualité).
      */
     public static function photoDataUri(string $absolutePath, int $maxEdge = 1600, int $jpegQuality = 92): ?string
     {

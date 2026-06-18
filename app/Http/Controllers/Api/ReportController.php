@@ -10,16 +10,17 @@ use App\Models\Report;
 use App\Models\Task;
 use App\Support\GdaLocale;
 use App\Support\GdaStatus;
-use App\Support\PdfImageEncoder;
 use App\Support\PartnerVisibility;
+use App\Support\PdfImageEncoder;
 use App\Support\ProjectStatistics;
 use App\Support\ReportChartStorage;
+use App\Support\ReportPdfGenerator;
 use App\Support\ReportPresentation;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ReportController extends Controller
 {
@@ -68,10 +69,8 @@ class ReportController extends Controller
             'chart_images.act' => ['nullable', 'string', 'max:12000000'],
         ]);
 
-        $forPartner = PartnerVisibility::filterForPartner($request->user());
-        $overall = $forPartner
-            ? ProjectStatistics::build($project, ReportPresentation::forLocale(GdaLocale::fromRequest($request)), $request->user())['overall_progress']
-            : $project->overallProgress();
+        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
+        $statistics = ProjectStatistics::build($project, $presentation, $request->user(), excludePartnerHidden: true);
 
         $report = Report::create([
             'project_id' => $project->id,
@@ -80,7 +79,7 @@ class ReportController extends Controller
             'temperature' => $data['temperature'] ?? null,
             'weather' => $data['weather'] ?? null,
             'page_number' => $this->estimateReportPageNumber($project),
-            'overall_progress' => $overall,
+            'overall_progress' => $statistics['overall_progress'],
             'notes' => $data['notes'] ?? null,
             'generated_at' => now(),
         ]);
@@ -91,8 +90,7 @@ class ReportController extends Controller
             Cache::put('report_pdf_charts:'.$report->id, $chartImages, now()->addHours(24));
         }
 
-        $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
-        $tasks = $this->tasksForPdfCollection($project, $request->user())
+        $tasks = $this->tasksForPdfCollection($project)
             ->map(fn (array $row) => $this->localizeTaskRowForApi($row, $presentation))
             ->values()
             ->all();
@@ -107,7 +105,7 @@ class ReportController extends Controller
                 'overall_progress' => $report->overall_progress,
                 'notes' => $report->notes,
             ],
-            'statistics' => ProjectStatistics::build($project, $presentation, $request->user()),
+            'statistics' => $statistics,
             'tasks' => $tasks,
         ], 201);
     }
@@ -122,7 +120,7 @@ class ReportController extends Controller
             : GdaLocale::fromRequest($request);
         $presentation = ReportPresentation::forLocale($locale);
         $forPartner = PartnerVisibility::filterForPartner($request->user());
-        $statistics = ProjectStatistics::build($project, $presentation, $request->user());
+        $statistics = ProjectStatistics::build($project, $presentation, $request->user(), excludePartnerHidden: true);
         $displayOverallProgress = (int) ($statistics['overall_progress'] ?? $report->overall_progress);
         $chartImages = ReportChartStorage::loadForPdf($report->id);
         if ($chartImages === []) {
@@ -132,56 +130,57 @@ class ReportController extends Controller
         if ($forPartner) {
             $chartImages = [];
         }
-        $pdfRows = $this->buildPdfRows($project, $presentation, $request->user());
+        $pdfRows = $this->buildPdfRows($project, $presentation);
         $pdfPhotoSections = $this->buildPdfPhotoSections($project, $presentation);
-
-        $pdf = Pdf::loadView('reports.pdf', [
-            'project' => $project,
-            'report' => $report,
-            'statistics' => $statistics,
-            'display_overall_progress' => $displayOverallProgress,
-            'show_admin_partner_markers' => ! $forPartner,
-            'chartImages' => $chartImages,
-            'pdf_rows' => $pdfRows,
-            'pdfPhotoSections' => $pdfPhotoSections,
-            'projectTitle' => strtoupper($project->name),
-            'copy' => $presentation->copy(),
-            'statsCopy' => $presentation->statsCopy(),
-            'presentation' => $presentation,
-        ])->setPaper('a4', 'landscape')->setOptions([
-            'dpi' => 150,
-            'defaultFont' => 'DejaVu Sans',
-            'isHtml5ParserEnabled' => true,
-            'isFontSubsettingEnabled' => true,
-            'isRemoteEnabled' => true,
-            'chroot' => storage_path('app'),
-        ]);
 
         $filename = 'rapport-gda-'.$report->report_date->format('Y-m-d').'-'.$report->id.'.pdf';
 
-        return $pdf->download($filename);
+        try {
+            return ReportPdfGenerator::download($filename, [
+                'project' => $project,
+                'report' => $report,
+                'statistics' => $statistics,
+                'display_overall_progress' => $displayOverallProgress,
+                'show_admin_partner_markers' => false,
+                'chartImages' => $chartImages,
+                'pdf_rows' => $pdfRows,
+                'pdfPhotoSections' => $pdfPhotoSections,
+                'projectTitle' => strtoupper($project->name),
+                'copy' => $presentation->copy(),
+                'statsCopy' => $presentation->statsCopy(),
+                'presentation' => $presentation,
+            ], $presentation->copy()['page'] ?? 'Page');
+        } catch (Throwable $e) {
+            report($e);
+
+            $message = config('app.debug')
+                ? 'PDF : '.$e->getMessage()
+                : 'PDF indisponible.';
+
+            return response()->json(['message' => $message], 500);
+        }
     }
 
     /**
      * @return array<int, array<string, mixed>>
      */
-    protected function tasksForPdf(Project $project, $user = null): array
+    protected function tasksForPdf(Project $project): array
     {
-        return $this->tasksForPdfCollection($project, $user)->values()->all();
+        return $this->tasksForPdfCollection($project)->values()->all();
     }
 
     /**
+     * Tâches visibles partenaire uniquement (export PDF partageable).
+     *
      * @return Collection<int, array<string, mixed>>
      */
-    protected function tasksForPdfCollection(Project $project, $user = null): Collection
+    protected function tasksForPdfCollection(Project $project): Collection
     {
         $query = Task::query()
             ->forProject($project->id)
             ->with(['subPhase.phase', 'latestDailyUpdate']);
 
-        if (PartnerVisibility::filterForPartner($user)) {
-            PartnerVisibility::applyToTaskQuery($query);
-        }
+        PartnerVisibility::applyToTaskQuery($query);
 
         return $query->get()
             ->sortBy([
@@ -190,11 +189,11 @@ class ReportController extends Controller
                 fn (Task $a, Task $b) => $a->sort_order <=> $b->sort_order,
             ])
             ->values()
-            ->map(function (Task $task) use ($user) {
+            ->map(function (Task $task) {
                 $latest = $task->latestDailyUpdate;
                 $status = $latest?->status ?? 'non_demarre';
 
-                $row = [
+                return [
                     'phase' => $task->subPhase->phase->name,
                     'phase_sort' => $task->subPhase->phase->sort_order,
                     'subphase' => $task->subPhase->name,
@@ -208,36 +207,23 @@ class ReportController extends Controller
                     'status_label' => GdaStatus::labelFr($status),
                     'status_comment' => $status === 'annule' ? $latest?->comment : null,
                 ];
-
-                if (! PartnerVisibility::filterForPartner($user)) {
-                    $row = array_merge($row, PartnerVisibility::taskVisibilityPayload($task));
-                }
-
-                return $row;
             });
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    protected function buildPdfRows(Project $project, ?ReportPresentation $presentation = null, $user = null): array
+    protected function buildPdfRows(Project $project, ?ReportPresentation $presentation = null): array
     {
         $presentation ??= ReportPresentation::forLocale('fr');
-        $sorted = $this->tasksForPdfCollection($project, $user)->sortBy([
+        $sorted = $this->tasksForPdfCollection($project)->sortBy([
             fn (array $a, array $b) => $a['phase_sort'] <=> $b['phase_sort'],
             fn (array $a, array $b) => $a['subphase_sort'] <=> $b['subphase_sort'],
             fn (array $a, array $b) => $a['sort_order'] <=> $b['sort_order'],
         ])->values();
 
-        $phaseCounts = $sorted->groupBy('phase')->map->count();
-        $subCounts = $sorted->groupBy(fn (array $r) => $r['phase'].'|'.$r['subphase'])->map->count();
-
-        $seenP = [];
-        $seenS = [];
         $out = [];
         foreach ($sorted as $row) {
-            $pk = $row['phase'];
-            $sk = $pk.'|'.$row['subphase'];
             $localized = array_merge($row, [
                 'phase' => $presentation->translate($row['phase'], 'phases'),
                 'subphase' => $presentation->translate($row['subphase'], 'subphases'),
@@ -249,14 +235,7 @@ class ReportController extends Controller
                 'duration_label' => $presentation->durationLabel((int) $row['duration_days']),
                 'start_label' => $presentation->formatTaskStartDate($project->start_date, (int) $row['start_day']),
             ]);
-            $out[] = array_merge($localized, [
-                'show_phase_cell' => ! isset($seenP[$pk]),
-                'phase_rowspan' => $phaseCounts[$pk],
-                'show_subphase_cell' => ! isset($seenS[$sk]),
-                'subphase_rowspan' => $subCounts[$sk],
-            ]);
-            $seenP[$pk] = true;
-            $seenS[$sk] = true;
+            $out[] = $localized;
         }
 
         return $out;
@@ -304,7 +283,7 @@ class ReportController extends Controller
                     continue;
                 }
 
-                $encoded = PdfImageEncoder::photoDataUri($full, 1600, 92);
+                $encoded = PdfImageEncoder::photoDataUri($full, 520, 88);
                 if ($encoded !== null) {
                     $images[] = $encoded;
                 }
@@ -356,7 +335,9 @@ class ReportController extends Controller
 
     protected function estimateReportPageNumber(Project $project): string
     {
-        $taskCount = Task::query()->forProject($project->id)->count();
+        $taskCountQuery = Task::query()->forProject($project->id);
+        PartnerVisibility::applyToTaskQuery($taskCountQuery);
+        $taskCount = $taskCountQuery->count();
         $pages = max(1, (int) ceil($taskCount / 14));
         if ($taskCount > 0) {
             $pages++;

@@ -15,9 +15,13 @@ final class ProjectStatistics
      *
      * @return array<string, mixed>
      */
-    public static function build(Project $project, ReportPresentation $presentation, ?User $user = null): array
-    {
-        $forPartner = PartnerVisibility::filterForPartner($user);
+    public static function build(
+        Project $project,
+        ReportPresentation $presentation,
+        ?User $user = null,
+        bool $excludePartnerHidden = false,
+    ): array {
+        $forPartner = PartnerVisibility::filterForPartner($user) || $excludePartnerHidden;
         $tasks = self::tasksForStats($project, $forPartner);
         $overall = self::overallProgressFromTasks($tasks);
         $loc = $presentation->locale();

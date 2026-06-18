@@ -15,7 +15,7 @@ final class ReportChartStorage
 
     /**
      * @param  array<string, string>  $images  data:image/...;base64,...
-     * @return array<string, string>  chemins relatifs enregistrés
+     * @return array<string, string> chemins relatifs enregistrés
      */
     public static function persist(int $reportId, array $images): array
     {
@@ -38,7 +38,7 @@ final class ReportChartStorage
     }
 
     /**
-     * @return array<string, string>  data URIs prêts pour DomPDF
+     * @return array<string, string> data URIs prêts pour le PDF
      */
     public static function loadForPdf(int $reportId): array
     {

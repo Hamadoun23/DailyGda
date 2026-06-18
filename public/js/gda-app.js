@@ -31,8 +31,8 @@ const GDA_CHART_IDS_DASHBOARD = {
 };
 
 /** Résolution d'export des graphiques vers le PDF (Chart.js devicePixelRatio). */
-const PDF_CHART_EXPORT_DPR = 3;
-const PDF_CHART_CAPTURE_WIDTH = 1180;
+const PDF_CHART_EXPORT_DPR = 2.5;
+const PDF_CHART_CAPTURE_WIDTH = 1280;
 
 const GDA_CHART_IDS_REPORT = {
   pie: 'report-chart-status-pie',
@@ -1441,7 +1441,11 @@ function renderReportStatsCharts(opts = {}) {
   destroyReportStatsCharts();
   const root = opts.root || document;
   syncReportActivityPhaseSelect(root);
-  renderGdaCharts(GDA_CHART_IDS_REPORT, reportChartInstances, () => reportActivityPhaseFilter, { ...opts, root });
+  renderGdaCharts(GDA_CHART_IDS_REPORT, reportChartInstances, () => reportActivityPhaseFilter, {
+    ...opts,
+    root,
+    isReport: true,
+  });
 }
 
 function isValidChartDataUrl(url) {
@@ -1495,6 +1499,7 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
   if (typeof Chart === 'undefined' || !dashboardData?.charts) return;
 
   const forPdf = !!opts.forPdf;
+  const isReport = !!opts.isReport;
   const root = opts.root || document;
   const $id = chartDomRoot(root);
   const prevDpr = Chart.defaults.devicePixelRatio;
@@ -1541,17 +1546,36 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
   });
 
   if (pieLabels.length) {
+    const pieLegendRight = isReport || forPdf;
     const pie = new Chart(pieEl, {
-      type: 'pie',
+      type: 'doughnut',
       data: {
         labels: pieLabels,
-        datasets: [{ data: pieData, backgroundColor: pieColors, borderWidth: 1, borderColor: '#fff' }],
+        datasets: [{
+          data: pieData,
+          backgroundColor: pieColors,
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 6,
+        }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: pieLegendRight ? '58%' : '52%',
+        layout: { padding: { top: 4, bottom: 4, left: 4, right: 4 } },
         plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+          legend: {
+            position: pieLegendRight ? 'right' : 'bottom',
+            align: 'center',
+            labels: {
+              boxWidth: forPdf ? 14 : 12,
+              padding: forPdf ? 14 : 12,
+              font: { size: forPdf ? 13 : 12, weight: '600' },
+              usePointStyle: true,
+              pointStyle: 'rectRounded',
+            },
+          },
           tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} activité(s)` } },
         },
       },
@@ -1561,28 +1585,67 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
 
   const phases = dashboardData.progress_by_phase || [];
   if (phases.length) {
+    const phaseHorizontal = isReport || forPdf;
+    const phaseBarHeight = Math.min(forPdf ? 420 : 380, Math.max(forPdf ? 300 : 280, phases.length * (forPdf ? 34 : 30) + 64));
+    const phaseWrap = barPhaseEl.parentElement;
+    if (phaseWrap && phaseHorizontal) phaseWrap.style.height = `${phaseBarHeight}px`;
+
+    const phaseDataset = {
+      label: tr('dash.chartPhase'),
+      data: phases.map(p => p.progress),
+      backgroundColor: phases.map(p =>
+        p.progress === 100 ? '#1a7a42' : p.progress > 0 ? '#c8521a' : '#d5cfc2',
+      ),
+      borderRadius: phaseHorizontal ? 4 : 6,
+      barThickness: phaseHorizontal ? (forPdf ? 18 : 16) : undefined,
+      maxBarThickness: phaseHorizontal ? 22 : 48,
+    };
+
     const bp = new Chart(barPhaseEl, {
       type: 'bar',
       data: {
         labels: phases.map(p => p.phase),
-        datasets: [
-          {
-            label: tr('dash.chartPhase'),
-            data: phases.map(p => p.progress),
-            backgroundColor: phases.map(p =>
-              p.progress === 100 ? '#1a7a42' : p.progress > 0 ? '#c8521a' : '#d5cfc2',
-            ),
-            borderRadius: 6,
-          },
-        ],
+        datasets: [phaseDataset],
       },
       options: {
+        indexAxis: phaseHorizontal ? 'y' : 'x',
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
-          x: { ticks: { maxRotation: 40, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
-        },
+        scales: phaseHorizontal
+          ? {
+              x: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: 'rgba(26,58,92,0.08)' },
+                ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
+              },
+              y: {
+                grid: { display: false },
+                ticks: {
+                  autoSkip: false,
+                  font: { size: forPdf ? 10 : 11, weight: '600' },
+                  color: '#1a3a5c',
+                },
+              },
+            }
+          : {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: 'rgba(26,58,92,0.08)' },
+                ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  maxRotation: forPdf ? 35 : 40,
+                  minRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 14,
+                  font: { size: forPdf ? 10 : 9 },
+                },
+              },
+            },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1625,8 +1688,8 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
-          y: { ticks: { font: { size: 11 } } },
+          x: { beginAtZero: true, max: 100, grid: { color: 'rgba(26,58,92,0.08)' }, ticks: { callback: v => v + '%', font: { size: isReport || forPdf ? 10 : 10 } } },
+          y: { grid: { display: false }, ticks: { font: { size: isReport || forPdf ? 11 : 11 }, color: '#1a3a5c' } },
         },
         plugins: {
           legend: { display: false },
@@ -1737,19 +1800,23 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
     if (actCanvasWrap) actCanvasWrap.hidden = true;
   }
 
-  if (forPdf) {
+  if (forPdf || isReport) {
     const tallWrap = barSubEl.closest('.dashboard-chart-canvas--tall');
-    if (tallWrap) tallWrap.style.height = '520px';
+    if (tallWrap) tallWrap.style.height = forPdf ? '560px' : '480px';
     const pieWrap = pieEl.parentElement;
+    if (pieWrap) pieWrap.style.height = forPdf ? '320px' : '300px';
+    const phases = dashboardData.progress_by_phase || [];
     const phaseWrap = barPhaseEl.parentElement;
-    if (pieWrap) pieWrap.style.height = '280px';
-    if (phaseWrap) phaseWrap.style.height = '280px';
+    if (phaseWrap && (isReport || forPdf)) {
+      const phaseH = Math.min(forPdf ? 420 : 380, Math.max(forPdf ? 300 : 280, phases.length * (forPdf ? 34 : 30) + 64));
+      phaseWrap.style.height = `${phaseH}px`;
+    }
     const acts = ch.activities || [];
     const phaseFilter = (typeof getPhaseFilter === 'function' ? getPhaseFilter() : null) || '__all__';
     const actCount =
       phaseFilter === '__all__' ? acts.length : acts.filter(a => a.phase === phaseFilter).length;
     if (actCanvasWrap && actCount > 0) {
-      actCanvasWrap.style.height = `${Math.min(900, Math.max(280, 28 * actCount + 80))}px`;
+      actCanvasWrap.style.height = `${Math.min(960, Math.max(320, 32 * actCount + 100))}px`;
     }
     instances.forEach(c => {
       try {
@@ -1757,8 +1824,10 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
         c.update('none');
       } catch (_) {}
     });
-    Chart.defaults.devicePixelRatio = prevDpr;
-    Chart.defaults.animation = prevAnim;
+    if (forPdf) {
+      Chart.defaults.devicePixelRatio = prevDpr;
+      Chart.defaults.animation = prevAnim;
+    }
   }
 }
 
@@ -2514,7 +2583,7 @@ document.addEventListener('keydown', e => {
 
 const REPORT_COPY = {
   fr: {
-    progressTitle: pct => `Avancement (${pct}%)`,
+    progress_title: 'Avancement',
     reportTitle: 'Rapport journalier de chantier',
     overallProgress: 'Avancement global du projet',
     date: 'Date',
@@ -2533,7 +2602,7 @@ const REPORT_COPY = {
     },
   },
   en: {
-    progressTitle: pct => `PROGRESS (${pct}%)`,
+    progress_title: 'PROGRESS',
     reportTitle: 'DAILY SITE PROGRESS REPORT',
     overallProgress: 'Overall Project Progress',
     date: 'Date',
@@ -2654,7 +2723,16 @@ async function downloadReportPdf(reportId, locale = gdaUiLang()) {
     headers,
     credentials: 'include',
   });
-  if (!res.ok) throw new Error('PDF indisponible');
+  if (!res.ok) {
+    let msg = tr('report.pdfUnavailable') || 'PDF indisponible';
+    try {
+      const j = JSON.parse(await res.text());
+      msg = formatApiErrorMessage(j) || j.message || j.error || msg;
+    } catch (_) {
+      /* corps non JSON */
+    }
+    throw new Error(msg);
+  }
   return res.blob();
 }
 
@@ -2673,26 +2751,29 @@ function getReportPdfCaptureRoot() {
 }
 
 async function ensureReportChartsForPdf() {
-  if (!dashboardData) {
-    await refreshDashboard();
-  }
-  if (!dashboardData?.charts) {
-    throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
-  }
-  const root = getReportPdfCaptureRoot();
-  root.innerHTML = buildReportStatsHTML(gdaUiLang());
-  await new Promise(resolve => {
-    requestAnimationFrame(() => {
-      renderReportStatsCharts({ forPdf: true, root });
-      requestAnimationFrame(resolve);
+  const savedDashboard = dashboardData;
+  try {
+    dashboardData = await apiFetch('/dashboard?partner_export=1');
+    if (!dashboardData?.charts) {
+      throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
+    }
+    const root = getReportPdfCaptureRoot();
+    root.innerHTML = buildReportStatsHTML(gdaUiLang());
+    await new Promise(resolve => {
+      requestAnimationFrame(() => {
+        renderReportStatsCharts({ forPdf: true, root });
+        requestAnimationFrame(resolve);
+      });
     });
-  });
-  const ok = await waitForReportChartCanvases(root);
-  if (!ok) {
-    root.innerHTML = '';
-    throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
+    const ok = await waitForReportChartCanvases(root);
+    if (!ok) {
+      root.innerHTML = '';
+      throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
+    }
+    return root;
+  } finally {
+    dashboardData = savedDashboard;
   }
-  return root;
 }
 
 function captureReportChartImages(root) {
@@ -2781,44 +2862,83 @@ function buildReportStatsHTML(lang = gdaUiLang()) {
   if (!dashboardData) return '';
   const overall = dashboardData.overall_progress ?? overallProgress();
   const project = document.getElementById('r-project')?.value || '';
+  const stats = dashboardData.stats || {};
+  const cancelled = stats.cancelled ?? stats.blocked ?? 0;
 
   return `
-    <section class="rp-stats-section">
-      <h2 class="rp-stats-main-title">${escapeHtml(tr('dash.statsHead'))}</h2>
-      <p class="rp-stats-project">${escapeHtml(project.toUpperCase())} — ${escapeHtml(tr('sidebar.overall'))} : <strong>${overall}%</strong></p>
-      <p class="dashboard-charts-intro">${escapeHtml(tr('dash.statsIntro'))}</p>
-      <div class="dashboard-charts-grid">
-        <div class="dashboard-chart-wrap">
-          <div class="dashboard-chart-title">${escapeHtml(tr('dash.chartStatus'))}</div>
-          <div class="dashboard-chart-canvas">
-            <canvas id="report-chart-status-pie" aria-label="${escapeHtmlAttr(tr('dash.chartStatus'))}"></canvas>
-          </div>
+    <section class="rp-stats-page">
+      <div class="rp-page-banner">
+        <div class="rp-page-banner__title">${escapeHtml(tr('dash.statsHead'))}</div>
+        <div class="rp-page-banner__meta">${escapeHtml(project.toUpperCase())}</div>
+      </div>
+      <div class="rp-kpi-grid">
+        <div class="rp-kpi-card rp-kpi-card--overall">
+          <div class="rp-kpi-val">${overall}%</div>
+          <div class="rp-kpi-lbl">${escapeHtml(tr('sidebar.overall'))}</div>
         </div>
-        <div class="dashboard-chart-wrap">
-          <div class="dashboard-chart-title">${escapeHtml(tr('dash.chartPhase'))}</div>
-          <div class="dashboard-chart-canvas">
-            <canvas id="report-chart-phase-bar" aria-label="${escapeHtmlAttr(tr('dash.chartPhase'))}"></canvas>
-          </div>
+        <div class="rp-kpi-card">
+          <div class="rp-kpi-val">${stats.total ?? 0}</div>
+          <div class="rp-kpi-lbl">${escapeHtml(tr('stat.total'))}</div>
         </div>
-        <div class="dashboard-chart-wrap dashboard-chart-wrap--wide">
-          <div class="dashboard-chart-title">${escapeHtml(tr('dash.chartSub'))}</div>
-          <div class="dashboard-chart-canvas dashboard-chart-canvas--tall">
-            <canvas id="report-chart-subphase-bar" aria-label="${escapeHtmlAttr(tr('dash.chartSub'))}"></canvas>
-          </div>
+        <div class="rp-kpi-card rp-kpi-card--ok">
+          <div class="rp-kpi-val">${stats.done ?? 0}</div>
+          <div class="rp-kpi-lbl">${escapeHtml(tr('stat.done'))}</div>
         </div>
-        <div class="dashboard-chart-wrap dashboard-chart-wrap--wide">
-          <div class="dashboard-chart-head-row">
-            <div class="dashboard-chart-title">${escapeHtml(tr('dash.chartAct'))}</div>
-            <div id="report-activity-toolbar" class="dashboard-activity-toolbar" style="display:none">
-              <label for="report-activity-phase-filter" class="dashboard-activity-filter-lbl">${escapeHtml(tr('dash.filterShow'))}</label>
-              <select id="report-activity-phase-filter" class="dashboard-activity-phase-select" onchange="onReportActivityPhaseFilterChange(this)">
-                <option value="">—</option>
-              </select>
+        <div class="rp-kpi-card rp-kpi-card--warn">
+          <div class="rp-kpi-val">${stats.in_progress ?? 0}</div>
+          <div class="rp-kpi-lbl">${escapeHtml(tr('stat.prog'))}</div>
+        </div>
+        <div class="rp-kpi-card rp-kpi-card--danger">
+          <div class="rp-kpi-val">${cancelled}</div>
+          <div class="rp-kpi-lbl">${escapeHtml(tr('stat.cancel'))}</div>
+        </div>
+      </div>
+      <div class="rp-charts-preview">
+        <div class="rp-charts-row rp-charts-row--half">
+          <div class="rp-chart-slot">
+            <div class="rp-chart-card">
+              <div class="rp-chart-card__title">${escapeHtml(tr('dash.chartStatus'))}</div>
+              <div class="dashboard-chart-canvas dashboard-chart-canvas--pie">
+                <canvas id="report-chart-status-pie" aria-label="${escapeHtmlAttr(tr('dash.chartStatus'))}"></canvas>
+              </div>
             </div>
           </div>
-          <div id="report-activity-empty" class="dashboard-activity-empty" hidden></div>
-          <div id="report-activity-chart-canvas" class="dashboard-chart-canvas dashboard-chart-canvas--activities">
-            <canvas id="report-chart-activity-bar" aria-label="${escapeHtmlAttr(tr('dash.chartAct'))}"></canvas>
+          <div class="rp-chart-slot">
+            <div class="rp-chart-card">
+              <div class="rp-chart-card__title">${escapeHtml(tr('dash.chartPhase'))}</div>
+              <div class="dashboard-chart-canvas dashboard-chart-canvas--phase">
+                <canvas id="report-chart-phase-bar" aria-label="${escapeHtmlAttr(tr('dash.chartPhase'))}"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="rp-charts-row">
+          <div class="rp-chart-slot rp-chart-slot--wide">
+            <div class="rp-chart-card">
+              <div class="rp-chart-card__title">${escapeHtml(tr('dash.chartSub'))}</div>
+              <div class="dashboard-chart-canvas dashboard-chart-canvas--tall">
+                <canvas id="report-chart-subphase-bar" aria-label="${escapeHtmlAttr(tr('dash.chartSub'))}"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="rp-charts-row">
+          <div class="rp-chart-slot rp-chart-slot--wide">
+            <div class="rp-chart-card">
+              <div class="rp-chart-card__title rp-chart-card__title-row">
+                <span>${escapeHtml(tr('dash.chartAct'))}</span>
+                <div id="report-activity-toolbar" class="dashboard-activity-toolbar" style="display:none">
+                  <label for="report-activity-phase-filter" class="dashboard-activity-filter-lbl">${escapeHtml(tr('dash.filterShow'))}</label>
+                  <select id="report-activity-phase-filter" class="dashboard-activity-phase-select" onchange="onReportActivityPhaseFilterChange(this)">
+                    <option value="">—</option>
+                  </select>
+                </div>
+              </div>
+              <div id="report-activity-empty" class="dashboard-activity-empty" hidden></div>
+              <div id="report-activity-chart-canvas" class="dashboard-chart-canvas dashboard-chart-canvas--activities">
+                <canvas id="report-chart-activity-bar" aria-label="${escapeHtmlAttr(tr('dash.chartAct'))}"></canvas>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2837,12 +2957,11 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
   const dateLocale = lang === 'en' ? 'en-GB' : 'fr-FR';
   const dateF = date ? new Date(date + 'T00:00:00').toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
-  const statusColor = s => {
-    if (lang === 'en') {
-      return ({ Completed: '#1a7a42', 'In progress': '#c8521a', 'Not started': '#8a8070', Cancelled: '#c01a1a' })[s] || '#888';
-    }
-    return ({ Terminé: '#1a7a42', 'En cours': '#c8521a', 'Non démarré': '#8a8070', Annulée: '#c01a1a' })[s] || '#888';
-  };
+  const statusClass = slug => ({
+    termine: 'st-termine',
+    en_cours: 'st-encours',
+    annule: 'st-annule',
+  }[slug] || 'st-nondemarre');
 
   const sorted = [...tasks];
   const phaseCounts = {};
@@ -2863,9 +2982,9 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
     const cancelComment =
       lang === 'en' && t.status_comment_display ? t.status_comment_display : t.status_comment;
     const statusNote = t.status === 'annule' && cancelComment
-      ? `<span class="rp-status-note">${escapeHtml(cancelComment)}</span>`
+      ? `<span class="status-note">${escapeHtml(cancelComment)}</span>`
       : '';
-    const rowCls = adminPartnerHiddenRowClass(t);
+    const rowCls = !window.GDA_IS_PARTNER && t.partner_hidden ? 'rp-row-hidden' : '';
     const phaseChip = showP && t.phase_hidden_from_partner
       ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true })
       : '';
@@ -2876,19 +2995,17 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
       ? adminPartnerHiddenChip({ partner_hidden: true, hidden_from_partner: true })
       : '';
     return `
-      <tr class="${rowCls.trim()}">
+      <tr class="${rowCls}">
         ${showP ? `<td rowspan="${phaseCounts[t.phase]}" class="rp-phase-cell">${escapeHtml(reportPhaseLabel(t, lang))}${phaseChip}</td>` : ''}
-        ${showS ? `<td rowspan="${subKeyCounts[sk]}" style="font-weight:600;color:#1a3a5c">${escapeHtml(reportSubphaseLabel(t, lang))}${subChip}</td>` : ''}
+        ${showS ? `<td rowspan="${subKeyCounts[sk]}" class="rp-subphase-cell">${escapeHtml(reportSubphaseLabel(t, lang))}${subChip}</td>` : ''}
         <td>${escapeHtml(reportActivityLabel(t, lang))}${taskChip}</td>
-        <td style="text-align:center">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
-        <td style="text-align:center">
-          <div style="display:flex;align-items:center;justify-content:center;gap:6px">
-            <div class="rp-mini-bar"><div class="rp-mini-fill" style="width:${t.progress}%;background:${t.progress === 100 ? '#1a7a42' : '#c8521a'}"></div></div>
-            <strong>${t.progress}%</strong>
-          </div>
+        <td style="text-align:center;color:#6b6358">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
+        <td class="rp-progress-cell">
+          <span class="bar-bg"><span class="bar-fill ${t.progress >= 100 ? 'done' : ''}" style="width:${Math.min(100, t.progress)}%"></span></span>
+          <strong>${t.progress}%</strong>
         </td>
-        <td style="text-align:center">${reportDurationLabel(t.duration, lang)}</td>
-        <td style="text-align:center;font-weight:bold;color:${statusColor(reportStatusLabel(t, lang))}">${escapeHtml(reportStatusLabel(t, lang))}${statusNote}</td>
+        <td style="text-align:center;color:#6b6358">${reportDurationLabel(t.duration, lang)}</td>
+        <td style="text-align:center" class="${statusClass(t.status)}">${escapeHtml(reportStatusLabel(t, lang))}${statusNote}</td>
       </tr>
     `;
   }).join('');
@@ -2896,43 +3013,56 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
   const photosSection = PHOTO_CATEGORIES
     .map(cat => [cat, photoStore[cat]])
     .filter(([, photos]) => photos.length > 0)
-    .map(([cat, photos]) => `
-    <section class="rp-photo-section">
-      <header class="rp-photo-header">
-        <div>
-          <span class="rp-photo-eyebrow">${copy.photosPrefix}</span>
-          <h3 class="rp-photo-title">${escapeHtml(reportPhotoCategoryLabel(cat, lang))}</h3>
+    .map(([cat, photos]) => {
+      const countLabel = lang === 'en'
+        ? `${photos.length} photo${photos.length > 1 ? 's' : ''}`
+        : `${photos.length} photo${photos.length > 1 ? 's' : ''}`;
+      const chunks = [];
+      for (let i = 0; i < photos.length; i += 2) chunks.push(photos.slice(i, i + 2));
+      const rows = chunks.map(chunk => `
+        <div class="photo-grid-row">
+          ${chunk.map(p => `<div class="photo-grid-cell"><img src="${p.src.replace(/"/g, '&quot;')}" alt=""></div>`).join('')}
+          ${chunk.length === 1 ? '<div class="photo-grid-cell"></div>' : ''}
         </div>
-        <span class="rp-photo-count">${photos.length}</span>
-      </header>
-      <div class="rp-photo-grid">
-        ${photos.map(p => `<figure class="rp-photo-card"><img src="${p.src.replace(/"/g, '&quot;')}" alt=""></figure>`).join('')}
+      `).join('');
+      return `
+    <section class="photo-page">
+      <div class="photo-head">
+        <div class="photo-eyebrow">${copy.photosPrefix}</div>
+        <div class="photo-title">${escapeHtml(reportPhotoCategoryLabel(cat, lang))}</div>
+        <div class="photo-count">${countLabel}</div>
       </div>
+      <div class="photo-grid">${rows}</div>
     </section>
-  `).join('');
+  `;
+    }).join('');
 
   const printStyles = forPrint ? `<style>@media print{@page{size:A4 landscape;margin:8mm}}</style>` : '';
   const statsHtml = buildReportStatsHTML(lang);
-  const dataPage = formatReportPageLabel(statsHtml ? 2 : 1);
 
   return `${printStyles}
   <div class="report-preview-root">
     ${statsHtml}
     <section class="rp-report-data-section">
-    <h2 class="rp-data-section-title">${escapeHtml(tr('report.dataSection'))}</h2>
-    <div class="rp-header">
-      <div>
-        <div class="rp-title" style="text-align:center">${escapeHtml(project.toUpperCase())}</div>
-        <div class="rp-title" style="text-align:center;margin-top:4px">${copy.progressTitle(pct)}</div>
-        <div class="rp-report-title" style="text-align:center">${copy.reportTitle}</div>
+      <div class="rp-page-banner">
+        <div class="rp-page-banner__title">${escapeHtml(tr('report.dataSection'))}</div>
+        <div class="rp-page-banner__meta">${escapeHtml(project.toUpperCase())}</div>
       </div>
-      <div class="rp-meta">
-        <div><b style="color:#1a3a5c">${copy.date} :</b> <span>${dateF}</span></div>
-        <div><b style="color:#1a3a5c">${copy.temperature} :</b> <span>${escapeHtml(temp)}°C</span></div>
-        <div><b style="color:#1a3a5c">${copy.weather} :</b> <span>${escapeHtml(reportWeatherLabel(weather, lang))}</span></div>
-        <div><b style="color:#1a3a5c">${copy.page} :</b> <span>${escapeHtml(dataPage)}</span></div>
+      <div class="rp-report-hero">
+        <div class="rp-report-hero__project">${escapeHtml(project.toUpperCase())}</div>
+        <div class="rp-report-hero__progress">${copy.progress_title} : <strong>${pct}%</strong></div>
+        <div class="rp-report-hero__title">${copy.reportTitle}</div>
+        <table class="rp-meta-table">
+          <tr>
+            <td class="rp-meta-k">${copy.date}</td>
+            <td class="rp-meta-v">${dateF}</td>
+            <td class="rp-meta-k">${copy.temperature}</td>
+            <td class="rp-meta-v">${escapeHtml(temp)}°C</td>
+            <td class="rp-meta-k">${copy.weather}</td>
+            <td class="rp-meta-v">${escapeHtml(reportWeatherLabel(weather, lang))}</td>
+          </tr>
+        </table>
       </div>
-    </div>
     <table class="rp-table">
       <thead>
         <tr>
@@ -2947,8 +3077,10 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
       </thead>
       <tbody>${tableRows}</tbody>
     </table>
-    <div class="rp-footer-band">${copy.overallProgress}</div>
-    <div class="rp-footer-pct">${pct}%</div>
+    <div class="rp-footer-wrap">
+      <div class="footer-band">${copy.overallProgress}</div>
+      <div class="footer-pct">${pct}%</div>
+    </div>
     </section>
     ${photosSection}
   </div>`;

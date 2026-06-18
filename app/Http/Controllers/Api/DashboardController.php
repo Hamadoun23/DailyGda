@@ -28,8 +28,9 @@ class DashboardController extends Controller
     {
         $project = $this->resolveProject($request);
         $presentation = ReportPresentation::forLocale(GdaLocale::fromRequest($request));
+        $excludePartnerHidden = $request->boolean('partner_export');
 
-        return response()->json($this->dashboardPayload($project, $presentation, $request->user()));
+        return response()->json($this->dashboardPayload($project, $presentation, $request->user(), $excludePartnerHidden));
     }
 
     public function export(Request $request): StreamedResponse
@@ -56,9 +57,13 @@ class DashboardController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function dashboardPayload(Project $project, ReportPresentation $presentation, $user = null): array
-    {
-        return ProjectStatistics::build($project, $presentation, $user);
+    private function dashboardPayload(
+        Project $project,
+        ReportPresentation $presentation,
+        $user = null,
+        bool $excludePartnerHidden = false,
+    ): array {
+        return ProjectStatistics::build($project, $presentation, $user, $excludePartnerHidden);
     }
 
     /**
