@@ -1748,10 +1748,17 @@ input[type=range]::-webkit-slider-thumb {
   min-height: 900px;
 }
 .report-preview.report-preview--pdf-capture .dashboard-chart-canvas--pie,
-.report-preview.report-preview--pdf-capture .dashboard-chart-canvas--phase,
-.report-preview.report-preview--pdf-capture .dashboard-chart-canvas--tall,
+.report-preview.report-preview--pdf-capture .dashboard-chart-canvas--phase {
+  height: 300px;
+  min-height: 300px;
+}
+.report-preview.report-preview--pdf-capture .dashboard-chart-canvas--tall {
+  height: 480px;
+  min-height: 360px;
+}
 .report-preview.report-preview--pdf-capture .dashboard-chart-canvas--activities {
-  min-height: 280px;
+  height: 320px;
+  min-height: 220px;
 }
 
 /* Modal tâche — lecture seule partenaire */

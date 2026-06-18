@@ -85,9 +85,14 @@ class ReportController extends Controller
         ]);
 
         $chartImages = $this->sanitizeChartImages($data['chart_images'] ?? null);
+        $chartsSaved = 0;
         if ($chartImages !== []) {
-            ReportChartStorage::persist($report->id, $chartImages);
-            Cache::put('report_pdf_charts:'.$report->id, $chartImages, now()->addHours(24));
+            $saved = ReportChartStorage::persist($report->id, $chartImages);
+            $chartsSaved = count($saved);
+            Cache::put('report_pdf_charts:'.$report->id, $chartImages, now()->addDays(7));
+            if ($chartsSaved === 0) {
+                $chartsSaved = count($chartImages);
+            }
         }
 
         $tasks = $this->tasksForPdfCollection($project)
@@ -107,6 +112,7 @@ class ReportController extends Controller
             ],
             'statistics' => $statistics,
             'tasks' => $tasks,
+            'charts_saved' => $chartsSaved,
         ], 201);
     }
 
@@ -119,16 +125,11 @@ class ReportController extends Controller
             ? (string) $request->query('locale', 'fr')
             : GdaLocale::fromRequest($request);
         $presentation = ReportPresentation::forLocale($locale);
-        $forPartner = PartnerVisibility::filterForPartner($request->user());
         $statistics = ProjectStatistics::build($project, $presentation, $request->user(), excludePartnerHidden: true);
         $displayOverallProgress = (int) ($statistics['overall_progress'] ?? $report->overall_progress);
         $chartImages = ReportChartStorage::loadForPdf($report->id);
         if ($chartImages === []) {
             $chartImages = Cache::get('report_pdf_charts:'.$report->id, []);
-        }
-        // Graphiques figés à la génération (souvent admin) : ne pas les montrer au partenaire.
-        if ($forPartner) {
-            $chartImages = [];
         }
         $pdfRows = $this->buildPdfRows($project, $presentation);
         $pdfPhotoSections = $this->buildPdfPhotoSections($project, $presentation);

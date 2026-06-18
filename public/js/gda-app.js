@@ -14,6 +14,7 @@ let selectedDailyDate = '';
 let dashboardData = null;
 let dashboardChartInstances = [];
 let reportChartInstances = [];
+let pdfCaptureChartInstances = [];
 /** Filtre graphique activités : nom de phase, ou `__all__` pour tout afficher. `null` = reprendre la 1re phase au prochain sync. */
 let dashboardActivityPhaseFilter = null;
 let reportActivityPhaseFilter = null;
@@ -1393,13 +1394,39 @@ function destroyDashboardCharts() {
   }
 }
 
-function destroyReportStatsCharts() {
-  while (reportChartInstances.length) {
-    const c = reportChartInstances.pop();
+function destroyChartInstances(instances) {
+  while (instances.length) {
+    const c = instances.pop();
     try {
       c.destroy();
     } catch (_) {}
   }
+}
+
+function destroyReportStatsCharts() {
+  destroyChartInstances(reportChartInstances);
+}
+
+function destroyPdfCaptureCharts() {
+  destroyChartInstances(pdfCaptureChartInstances);
+}
+
+function destroyReportStatsChartsInRoot(root) {
+  if (!root?.querySelector) return;
+  const kept = [];
+  while (reportChartInstances.length) {
+    const c = reportChartInstances.pop();
+    try {
+      if (c.canvas && root.contains(c.canvas)) {
+        c.destroy();
+      } else {
+        kept.push(c);
+      }
+    } catch (_) {
+      kept.push(c);
+    }
+  }
+  kept.forEach(c => reportChartInstances.push(c));
 }
 
 function syncReportActivityPhaseSelect(root = document) {
@@ -1438,10 +1465,20 @@ function onReportActivityPhaseFilterChange(el) {
 }
 
 function renderReportStatsCharts(opts = {}) {
-  destroyReportStatsCharts();
   const root = opts.root || document;
+  const isPdfCapture = !!opts.captureOnly || root.id === 'report-pdf-capture-root';
+  const instances = isPdfCapture ? pdfCaptureChartInstances : reportChartInstances;
+
+  if (isPdfCapture) {
+    destroyPdfCaptureCharts();
+  } else if (root !== document) {
+    destroyReportStatsChartsInRoot(root);
+  } else {
+    destroyReportStatsCharts();
+  }
+
   syncReportActivityPhaseSelect(root);
-  renderGdaCharts(GDA_CHART_IDS_REPORT, reportChartInstances, () => reportActivityPhaseFilter, {
+  renderGdaCharts(GDA_CHART_IDS_REPORT, instances, () => reportActivityPhaseFilter, {
     ...opts,
     root,
     isReport: true,
@@ -1465,27 +1502,27 @@ function isReportCanvasReady(root, key) {
   return canvas && canvas.width >= 80 && canvas.height >= 80;
 }
 
-async function waitForReportChartCanvases(root, maxAttempts = 30) {
+async function waitForReportChartCanvases(root, instances = reportChartInstances, maxAttempts = 40) {
   const keys = reportChartKeysToWait();
   const minCharts = keys.length;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const ready = keys.every(key => isReportCanvasReady(root, key));
-    if (ready && reportChartInstances.length >= Math.min(2, minCharts)) {
-      reportChartInstances.forEach(c => {
+    if (ready && instances.length >= Math.min(2, minCharts)) {
+      instances.forEach(c => {
         try {
           c.resize();
           c.update('none');
         } catch (_) {}
       });
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 250));
       return true;
     }
-    reportChartInstances.forEach(c => {
+    instances.forEach(c => {
       try {
         c.resize();
       } catch (_) {}
     });
-    await new Promise(r => setTimeout(r, 120));
+    await new Promise(r => setTimeout(r, 150));
   }
   return false;
 }
@@ -2736,6 +2773,13 @@ async function downloadReportPdf(reportId, locale = gdaUiLang()) {
   return res.blob();
 }
 
+function restoreReportPreviewCharts() {
+  const preview = document.getElementById('report-preview-area');
+  if (!preview || !dashboardData?.charts) return;
+  if (!preview.querySelector(`#${GDA_CHART_IDS_REPORT.pie}`)) return;
+  requestAnimationFrame(() => renderReportStatsCharts({ root: preview }));
+}
+
 function getReportPdfCaptureRoot() {
   let el = document.getElementById('report-pdf-capture-root');
   if (!el) {
@@ -2744,7 +2788,7 @@ function getReportPdfCaptureRoot() {
     el.className = 'report-preview report-preview--pdf-capture';
     el.setAttribute('aria-hidden', 'true');
     el.style.cssText =
-      `position:fixed;left:0;top:0;width:${PDF_CHART_CAPTURE_WIDTH}px;max-width:100vw;z-index:99999;opacity:0.02;pointer-events:none;background:#faf8f4;overflow:auto;max-height:100vh`;
+      `position:fixed;left:-10000px;top:0;width:${PDF_CHART_CAPTURE_WIDTH}px;max-width:100vw;z-index:-1;visibility:visible;opacity:1;pointer-events:none;background:#faf8f4;overflow:visible;`;
     document.body.appendChild(el);
   }
   return el;
@@ -2752,22 +2796,21 @@ function getReportPdfCaptureRoot() {
 
 async function ensureReportChartsForPdf() {
   const savedDashboard = dashboardData;
+  const root = getReportPdfCaptureRoot();
   try {
     dashboardData = await apiFetch('/dashboard?partner_export=1');
     if (!dashboardData?.charts) {
       throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
     }
-    const root = getReportPdfCaptureRoot();
     root.innerHTML = buildReportStatsHTML(gdaUiLang());
     await new Promise(resolve => {
       requestAnimationFrame(() => {
-        renderReportStatsCharts({ forPdf: true, root });
+        renderReportStatsCharts({ forPdf: true, root, captureOnly: true });
         requestAnimationFrame(resolve);
       });
     });
-    const ok = await waitForReportChartCanvases(root);
+    const ok = await waitForReportChartCanvases(root, pdfCaptureChartInstances);
     if (!ok) {
-      root.innerHTML = '';
       throw new Error(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques');
     }
     return root;
@@ -2776,7 +2819,7 @@ async function ensureReportChartsForPdf() {
   }
 }
 
-function captureReportChartImages(root) {
+function captureReportChartImages(root, instances = reportChartInstances) {
   const scope = root && root.querySelector ? root : document.getElementById('report-pdf-capture-root') || document;
   const map = {
     status: GDA_CHART_IDS_REPORT.pie,
@@ -2788,7 +2831,7 @@ function captureReportChartImages(root) {
   for (const [key, id] of Object.entries(map)) {
     const canvas = scope.querySelector(`#${id}`);
     if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-    const chart = reportChartInstances.find(c => c.canvas === canvas);
+    const chart = instances.find(c => c.canvas === canvas);
     let dataUrl = '';
     if (chart && typeof chart.toBase64Image === 'function') {
       dataUrl = chart.toBase64Image('image/png', 1.0);
@@ -2806,12 +2849,11 @@ async function printReport() {
   const date = document.getElementById('r-date').value;
   const temp = document.getElementById('r-temp').value;
   const weather = document.getElementById('r-weather').value;
+  let captureRoot = null;
   try {
     toast(tr('report.pdfPreparing') || 'Préparation des graphiques…', '');
-    const captureRoot = await ensureReportChartsForPdf();
-    const chart_images = captureReportChartImages(captureRoot);
-    captureRoot.innerHTML = '';
-    destroyReportStatsCharts();
+    captureRoot = await ensureReportChartsForPdf();
+    const chart_images = captureReportChartImages(captureRoot, pdfCaptureChartInstances);
     if (!chart_images.status || !chart_images.phase) {
       toast(tr('report.chartsCaptureErr') || 'Impossible de capturer les graphiques', 'err');
       return;
@@ -2826,17 +2868,20 @@ async function printReport() {
         chart_images,
       }),
     });
+    if (gen.charts_saved === 0) {
+      toast(tr('report.chartsSaveWarn') || 'Graphiques non enregistrés côté serveur', '');
+    }
     lastReportId = gen.report.id;
     const blob = await downloadReportPdf(gen.report.id, gdaUiLang());
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
-    const preview = document.getElementById('report-preview-area');
-    if (preview?.querySelector(`#${GDA_CHART_IDS_REPORT.pie}`)) {
-      requestAnimationFrame(() => renderReportStatsCharts({ root: preview }));
-    }
     toast(tr('report.pdfOk') || 'PDF généré', 'ok');
   } catch (e) {
     toast(e.message || tr('common.error') || 'Erreur', 'err');
+  } finally {
+    destroyPdfCaptureCharts();
+    if (captureRoot) captureRoot.innerHTML = '';
+    restoreReportPreviewCharts();
   }
 }
 
