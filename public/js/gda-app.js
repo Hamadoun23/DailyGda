@@ -1547,7 +1547,7 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
   }
 
   const ch = dashboardData.charts;
-  Chart.defaults.font.family = "'Barlow', sans-serif";
+  Chart.defaults.font.family = 'Tahoma, Verdana, Segoe UI, sans-serif';
   Chart.defaults.color = '#6b6358';
 
   const pieEl = $id(ids.pie);
@@ -1924,7 +1924,7 @@ function renderDashboard() {
     return `<div class="dash-phase-row${phaseRowCls}" style="display:grid;grid-template-columns:180px 1fr 50px;align-items:center;gap:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:var(--text)">${p.phase} ${phaseChip}</div>
       <div class="pbar"><div class="pbar-fill ${cls}" style="width:${pct}%"></div></div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:${pct === 100 ? 'var(--ok)' : 'var(--accent)'}">${pct}%</div>
+      <div style="font-family:Tahoma,Verdana,'Segoe UI',sans-serif;font-size:16px;font-weight:700;color:${pct === 100 ? 'var(--ok)' : 'var(--accent)'}">${pct}%</div>
     </div>`;
   }).join('');
 
@@ -1936,12 +1936,12 @@ function renderDashboard() {
   } else {
     ra.innerHTML = items.map(a => `
       <div style="display:flex;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--bg2)">
-        <div style="background:var(--bg2);border-radius:6px;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);white-space:nowrap">${a.time}</div>
+        <div style="background:var(--bg2);border-radius:6px;padding:6px 10px;font-family:Tahoma,Verdana,'Segoe UI',sans-serif;font-size:12px;color:var(--muted);white-space:nowrap">${a.time}</div>
         <div>
           <div style="font-weight:600;font-size:13px">${escapeHtml(a.task_name)}</div>
           <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.action)} · <span style="color:var(--accent)">${escapeHtml(a.user)}</span></div>
         </div>
-        <div style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--accent)">${a.progress}%</div>
+        <div style="margin-left:auto;font-family:Tahoma,Verdana,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:var(--accent)">${a.progress}%</div>
       </div>`).join('');
   }
   }

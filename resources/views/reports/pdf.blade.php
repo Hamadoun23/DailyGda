@@ -7,7 +7,7 @@
         @page { margin: 8mm 10mm; size: A4 landscape; }
         * { box-sizing: border-box; }
         body {
-            font-family: DejaVu Sans, sans-serif;
+            font-family: Tahoma, DejaVu Sans, Verdana, sans-serif;
             font-size: 11px;
             color: #2a2620;
             margin: 0;
@@ -26,7 +26,8 @@
         .rp-page-banner__title {
             font-size: 16px;
             font-weight: bold;
-            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
             margin-bottom: 5px;
         }
         .rp-page-banner__meta {
@@ -90,6 +91,10 @@
         }
         .rp-stats-missing-charts { font-size: 10px; color: #8a8070; margin: 12px 0; padding: 12px; background: #f7f4ef; border-radius: 6px; }
 
+        /* En-tête document (page 1, au-dessus des stats) */
+        .rp-pdf-document-header { margin-bottom: 16px; }
+        .rp-pdf-document-header .rp-report-hero { margin-bottom: 0; }
+
         /* Page données */
         .rp-report-data-section { margin-top: 0; }
         .rp-report-hero {
@@ -113,16 +118,21 @@
             font-size: 11px;
             color: #6b6358;
             margin-bottom: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
         .rp-report-hero__title {
             font-size: 22px;
             font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
             color: #c8521a;
             margin: 4px 0 12px;
         }
         .rp-meta-table { width: auto; margin: 0 auto; border-collapse: collapse; }
         .rp-meta-table td { padding: 3px 14px; font-size: 10px; }
-        .rp-meta-k { color: #1a3a5c; font-weight: bold; text-align: right; }
+        .rp-meta-k { color: #1a3a5c; font-weight: bold; text-align: right; text-transform: uppercase; letter-spacing: 0.04em; }
         .rp-meta-v { color: #c8521a; font-weight: bold; }
 
         /* Tableau tâches */
@@ -217,6 +227,8 @@
         .photo-title {
             font-size: 16px;
             font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
             color: #ffffff;
         }
         .photo-count {
@@ -244,6 +256,10 @@
     </style>
 </head>
 <body>
+    <div class="rp-pdf-document-header">
+        @include('reports.partials.hero')
+    </div>
+
     <div class="rp-stats-page">
         @include('reports.partials.stats')
     </div>
@@ -252,22 +268,6 @@
         <div class="rp-page-banner">
             <div class="rp-page-banner__title">{{ $statsCopy['data_section'] ?? 'Données du rapport' }}</div>
             <div class="rp-page-banner__meta">{{ $projectTitle }}</div>
-        </div>
-
-        <div class="rp-report-hero">
-            <div class="rp-report-hero__project">{{ $projectTitle }}</div>
-            <div class="rp-report-hero__progress">{{ $copy['progress_title'] }} : <strong>{{ $display_overall_progress ?? $statistics['overall_progress'] ?? $report->overall_progress }}%</strong></div>
-            <div class="rp-report-hero__title">{{ $copy['report_title'] }}</div>
-            <table class="rp-meta-table">
-                <tr>
-                    <td class="rp-meta-k">{{ $copy['date'] }}</td>
-                    <td class="rp-meta-v">{{ $report->report_date->format('d/m/Y') }}</td>
-                    <td class="rp-meta-k">{{ $copy['temperature'] }}</td>
-                    <td class="rp-meta-v">{{ $report->temperature !== null ? $report->temperature.'°C' : '—' }}</td>
-                    <td class="rp-meta-k">{{ $copy['weather'] }}</td>
-                    <td class="rp-meta-v">{{ $report->weather ? $presentation->translate($report->weather, 'weather') : '—' }}</td>
-                </tr>
-            </table>
         </div>
 
         <table class="rp-table">

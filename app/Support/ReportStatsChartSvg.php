@@ -72,7 +72,7 @@ final class ReportStatsChartSvg
                 $seg['color']
             );
             $parts[] = sprintf(
-                '<text x="%d" y="%d" font-family="DejaVu Sans,sans-serif" font-size="8" fill="#1a1814">%s (%d)</text>',
+                '<text x="%d" y="%d" font-family="Tahoma,DejaVu Sans,Verdana,sans-serif" font-size="8" fill="#1a1814">%s (%d)</text>',
                 $lx + 14,
                 $ly,
                 self::xml($seg['label']),
@@ -121,7 +121,7 @@ final class ReportStatsChartSvg
                 round($y, 1)
             );
             $parts[] = sprintf(
-                '<text x="2" y="%s" font-family="DejaVu Sans,sans-serif" font-size="7" fill="#6b6358">%d%%</text>',
+                '<text x="2" y="%s" font-family="Tahoma,DejaVu Sans,Verdana,sans-serif" font-size="7" fill="#6b6358">%d%%</text>',
                 round($y + 3, 1),
                 $pct
             );
@@ -142,7 +142,7 @@ final class ReportStatsChartSvg
             );
             $label = self::truncateLabel((string) ($p['phase'] ?? ''), 14);
             $parts[] = sprintf(
-                '<text x="%s" y="%d" font-family="DejaVu Sans,sans-serif" font-size="7" fill="#1a1814" transform="rotate(-35 %s %d)">%s</text>',
+                '<text x="%s" y="%d" font-family="Tahoma,DejaVu Sans,Verdana,sans-serif" font-size="7" fill="#1a1814" transform="rotate(-35 %s %d)">%s</text>',
                 round($x + $barW / 2, 1),
                 $padT + $chartH + 14,
                 round($x + $barW / 2, 1),
@@ -224,7 +224,7 @@ final class ReportStatsChartSvg
             $label = self::truncateLabel((string) $row['label'], 38);
 
             $parts[] = sprintf(
-                '<text x="0" y="%d" font-family="DejaVu Sans,sans-serif" font-size="8" fill="#1a1814">%s</text>',
+                '<text x="0" y="%d" font-family="Tahoma,DejaVu Sans,Verdana,sans-serif" font-size="8" fill="#1a1814">%s</text>',
                 $y + 10,
                 self::xml($label)
             );
@@ -244,7 +244,7 @@ final class ReportStatsChartSvg
                 );
             }
             $parts[] = sprintf(
-                '<text x="%d" y="%d" font-family="DejaVu Sans,sans-serif" font-size="8" font-weight="bold" fill="#1a1814">%d%%</text>',
+                '<text x="%d" y="%d" font-family="Tahoma,DejaVu Sans,Verdana,sans-serif" font-size="8" font-weight="bold" fill="#1a1814">%d%%</text>',
                 $labelW + $chartW + 6,
                 $y + 10,
                 $pct
