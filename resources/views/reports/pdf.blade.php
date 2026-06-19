@@ -60,8 +60,9 @@
         .rp-kpi-card--danger { border-top-color: #c01a1a; }
         .rp-kpi-card--danger .rp-kpi-val { color: #c01a1a; }
 
-        /* Graphiques — une seule coupure avant la section données (évite page blanche DomPDF) */
-        .rp-stats-page { page-break-after: always; }
+        /* Coupure après le tableau tâches, avant les stats */
+        .rp-report-data-section { margin-top: 0; page-break-after: always; }
+        .rp-stats-page { margin-top: 0; }
         .rp-charts-layout { width: 100%; border-collapse: collapse; }
         .rp-chart-slot { vertical-align: top; padding: 0 0 12px 0; }
         .rp-chart-slot--half { width: 50%; }
@@ -96,7 +97,6 @@
         .rp-pdf-document-header .rp-report-hero { margin-bottom: 0; }
 
         /* Page données */
-        .rp-report-data-section { margin-top: 0; }
         .rp-report-hero {
             text-align: center;
             padding: 14px 16px 16px;
@@ -260,10 +260,6 @@
         @include('reports.partials.hero')
     </div>
 
-    <div class="rp-stats-page">
-        @include('reports.partials.stats')
-    </div>
-
     <div class="rp-report-data-section">
         <div class="rp-page-banner">
             <div class="rp-page-banner__title">{{ $statsCopy['data_section'] ?? 'Données du rapport' }}</div>
@@ -327,6 +323,10 @@
             <div class="footer-band">{{ $copy['overall_progress'] }}</div>
             <div class="footer-pct">{{ $display_overall_progress ?? $statistics['overall_progress'] ?? $report->overall_progress }}%</div>
         </div>
+    </div>
+
+    <div class="rp-stats-page">
+        @include('reports.partials.stats')
     </div>
 
     @foreach ($pdfPhotoSections as $section)

@@ -15,7 +15,7 @@ let dashboardData = null;
 let dashboardChartInstances = [];
 let reportChartInstances = [];
 let pdfCaptureChartInstances = [];
-/** Filtre graphique activités : nom de phase, ou `__all__` pour tout afficher. `null` = reprendre la 1re phase au prochain sync. */
+/** Filtre graphique activités : nom de phase, ou `__all__` pour tout afficher. `null` = « Toutes les phases » au prochain sync. */
 let dashboardActivityPhaseFilter = null;
 let reportActivityPhaseFilter = null;
 let reportActivityFilterProjectId = null;
@@ -1443,10 +1443,10 @@ function syncReportActivityPhaseSelect(root = document) {
     reportActivityPhaseFilter = null;
   }
   if (reportActivityPhaseFilter === null) {
-    reportActivityPhaseFilter = names[0] || '__all__';
+    reportActivityPhaseFilter = '__all__';
   }
   if (reportActivityPhaseFilter !== '__all__' && !names.includes(reportActivityPhaseFilter)) {
-    reportActivityPhaseFilter = names[0] || '__all__';
+    reportActivityPhaseFilter = '__all__';
   }
   const totalLabel = allActs.length ? ` (${allActs.length})` : '';
   sel.innerHTML =
@@ -1455,7 +1455,7 @@ function syncReportActivityPhaseSelect(root = document) {
       .join('') + `<option value="__all__">${escapeHtml(tr('dash.filterShowAll'))}${totalLabel}</option>`;
   if (reportActivityPhaseFilter === '__all__') sel.value = '__all__';
   else if (names.includes(reportActivityPhaseFilter)) sel.value = reportActivityPhaseFilter;
-  else sel.value = names[0] || '__all__';
+  else sel.value = '__all__';
   reportActivityPhaseFilter = sel.value;
 }
 
@@ -1880,10 +1880,10 @@ function syncDashboardActivityPhaseSelect() {
     dashboardActivityPhaseFilter = null;
   }
   if (dashboardActivityPhaseFilter === null) {
-    dashboardActivityPhaseFilter = names[0] || '__all__';
+    dashboardActivityPhaseFilter = '__all__';
   }
   if (dashboardActivityPhaseFilter !== '__all__' && !names.includes(dashboardActivityPhaseFilter)) {
-    dashboardActivityPhaseFilter = names[0] || '__all__';
+    dashboardActivityPhaseFilter = '__all__';
   }
   const totalLabel = allActs.length ? ` (${allActs.length})` : '';
   sel.innerHTML =
@@ -1892,7 +1892,7 @@ function syncDashboardActivityPhaseSelect() {
       .join('') + `<option value="__all__">${escapeHtml(tr('dash.filterShowAll'))}${totalLabel}</option>`;
   if (dashboardActivityPhaseFilter === '__all__') sel.value = '__all__';
   else if (names.includes(dashboardActivityPhaseFilter)) sel.value = dashboardActivityPhaseFilter;
-  else sel.value = names[0] || '__all__';
+  else sel.value = '__all__';
   dashboardActivityPhaseFilter = sel.value;
 }
 
