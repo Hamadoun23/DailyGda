@@ -155,7 +155,6 @@
             <th data-i18n="page.tasks.thPhase">Phase / Sous-phase</th>
             <th data-i18n="page.tasks.thAct">Activité</th>
             <th data-i18n="page.tasks.thStart">Début</th>
-            <th data-i18n="page.tasks.thDur">Durée</th>
             <th style="min-width:160px" data-i18n="page.tasks.thProg">Avancement</th>
             <th data-i18n="page.tasks.thStat">Statut</th>
             <th></th>

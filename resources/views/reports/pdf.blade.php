@@ -271,10 +271,9 @@
                 <tr>
                     <th style="width:14%">{{ $copy['cols']['phase'] }}</th>
                     <th style="width:14%">{{ $copy['cols']['subphase'] }}</th>
-                    <th style="width:24%">{{ $copy['cols']['activity'] }}</th>
-                    <th style="width:10%;text-align:center">{{ $copy['cols']['start'] }}</th>
-                    <th style="width:16%;text-align:center">{{ $copy['cols']['progress'] }}</th>
-                    <th style="width:8%;text-align:center">{{ $copy['cols']['duration'] }}</th>
+                    <th style="width:28%">{{ $copy['cols']['activity'] }}</th>
+                    <th style="width:12%;text-align:center">{{ $copy['cols']['start'] }}</th>
+                    <th style="width:18%;text-align:center">{{ $copy['cols']['progress'] }}</th>
                     <th style="width:14%;text-align:center">{{ $copy['cols']['status'] }}</th>
                 </tr>
             </thead>
@@ -299,7 +298,6 @@
                         <span class="bar-bg"><span class="bar-fill {{ ($t['progress'] ?? 0) >= 100 ? 'done' : '' }}" style="width: {{ min(100, (int) ($t['progress'] ?? 0)) }}%; display: block;"></span></span>
                         <strong>{{ (int) ($t['progress'] ?? 0) }}%</strong>
                     </td>
-                    <td style="text-align:center;color:#6b6358">{{ $t['duration_label'] }}</td>
                     @php
                         $cls = match ($t['status']) {
                             'termine' => 'st-termine',

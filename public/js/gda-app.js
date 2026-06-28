@@ -2212,7 +2212,7 @@ function renderAllTasks() {
     const phaseHidden = pt.some(t => t.phase_hidden_from_partner);
     const anyPartnerHidden = pt.some(t => t.partner_hidden);
     html += `<tr class="phase-row${anyPartnerHidden ? ' row-partner-hidden' : ''}">
-      <td colspan="7">${escapeHtml(ph)} ${phaseHidden ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true }) : ''}
+      <td colspan="6">${escapeHtml(ph)} ${phaseHidden ? adminPartnerHiddenChip({ partner_hidden: true, phase_hidden_from_partner: true }) : ''}
         <span style="margin-left:12px;font-weight:400;color:var(--muted)">${phasePct}% ${escapeHtml(tr('tasks.phaseDone'))}</span>
       </td>
     </tr>`;
@@ -2226,7 +2226,6 @@ function renderAllTasks() {
         <td><div style="font-weight:600;font-size:12px">${escapeHtml(t.subphase)}${subChip}</div></td>
         <td style="font-size:12px">${escapeHtml(t.activity)} ${adminPartnerHiddenChip(t)}</td>
         <td style="font-size:12px;color:var(--muted)">${escapeHtml(taskStartDateLabel(t.startDay))}</td>
-        <td style="font-size:12px;color:var(--muted)">${t.duration}j</td>
         <td>
           <div class="pbar-wrap">
             <div class="pbar"><div class="pbar-fill ${pctCls}" style="width:${t.progress}%"></div></div>
@@ -3049,7 +3048,6 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
           <span class="bar-bg"><span class="bar-fill ${t.progress >= 100 ? 'done' : ''}" style="width:${Math.min(100, t.progress)}%"></span></span>
           <strong>${t.progress}%</strong>
         </td>
-        <td style="text-align:center;color:#6b6358">${reportDurationLabel(t.duration, lang)}</td>
         <td style="text-align:center" class="${statusClass(t.status)}">${escapeHtml(reportStatusLabel(t, lang))}${statusNote}</td>
       </tr>
     `;
@@ -3116,7 +3114,6 @@ function buildReportHTML(forPrint, lang = gdaUiLang()) {
           <th>${copy.cols.activity}</th>
           <th style="text-align:center">${copy.cols.start}</th>
           <th style="text-align:center">${copy.cols.progress}</th>
-          <th style="text-align:center">${copy.cols.duration}</th>
           <th style="text-align:center">${copy.cols.status}</th>
         </tr>
       </thead>
