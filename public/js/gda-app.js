@@ -304,7 +304,7 @@ async function exportDashboardExcel() {
         try {
           const t = await res.text();
           if (t) msg = t.slice(0, 200);
-        } catch (_) {}
+        } catch (_) { }
       }
       throw new Error(msg || 'Export impossible');
     }
@@ -392,7 +392,7 @@ function showLogin() {
   window.location.href = window.GDA_LOGIN_URL || '/login';
 }
 
-function hideLogin() {}
+function hideLogin() { }
 
 function logoutOutsideClick(e) {
   const wrap = document.querySelector('.header-user-wrap');
@@ -453,7 +453,7 @@ async function performLogout() {
       headers: hdr,
       body: new URLSearchParams({ _token: csrf || '' }),
     });
-  } catch (_) {}
+  } catch (_) { }
   clearAuth();
   currentUser = null;
   window.location.href = window.GDA_LOGIN_URL || '/login';
@@ -666,7 +666,7 @@ function initNavWeather() {
         weatherCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         run();
       },
-      () => {},
+      () => { },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
     );
   }
@@ -756,7 +756,7 @@ function getWeatherLocation() {
     if (!raw) return null;
     const o = JSON.parse(raw);
     if (o && typeof o.lat === 'number' && typeof o.lon === 'number') return o;
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -781,7 +781,7 @@ function destroyForecastCharts() {
     const c = forecastChartInstances.pop();
     try {
       c.destroy();
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -1131,12 +1131,12 @@ function renderForecastPage(data) {
   const loc = saved?.label || [data.city, data.country].filter(Boolean).join(', ') || '—';
   const updated = data.fetched_at
     ? new Date(data.fetched_at).toLocaleString(gdaDateLocale(), {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
     : '—';
 
   const th = data.thresholds || {};
@@ -1390,7 +1390,7 @@ function destroyDashboardCharts() {
     const c = dashboardChartInstances.pop();
     try {
       c.destroy();
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -1399,7 +1399,7 @@ function destroyChartInstances(instances) {
     const c = instances.pop();
     try {
       c.destroy();
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -1512,7 +1512,7 @@ async function waitForReportChartCanvases(root, instances = reportChartInstances
         try {
           c.resize();
           c.update('none');
-        } catch (_) {}
+        } catch (_) { }
       });
       await new Promise(r => setTimeout(r, 250));
       return true;
@@ -1520,7 +1520,7 @@ async function waitForReportChartCanvases(root, instances = reportChartInstances
     instances.forEach(c => {
       try {
         c.resize();
-      } catch (_) {}
+      } catch (_) { }
     });
     await new Promise(r => setTimeout(r, 150));
   }
@@ -1650,39 +1650,39 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
         maintainAspectRatio: false,
         scales: phaseHorizontal
           ? {
-              x: {
-                beginAtZero: true,
-                max: 100,
-                grid: { color: 'rgba(26,58,92,0.08)' },
-                ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
-              },
-              y: {
-                grid: { display: false },
-                ticks: {
-                  autoSkip: false,
-                  font: { size: forPdf ? 10 : 11, weight: '600' },
-                  color: '#1a3a5c',
-                },
-              },
-            }
-          : {
-              y: {
-                beginAtZero: true,
-                max: 100,
-                grid: { color: 'rgba(26,58,92,0.08)' },
-                ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
-              },
-              x: {
-                grid: { display: false },
-                ticks: {
-                  maxRotation: forPdf ? 35 : 40,
-                  minRotation: 0,
-                  autoSkip: true,
-                  maxTicksLimit: 14,
-                  font: { size: forPdf ? 10 : 9 },
-                },
+            x: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: 'rgba(26,58,92,0.08)' },
+              ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
+            },
+            y: {
+              grid: { display: false },
+              ticks: {
+                autoSkip: false,
+                font: { size: forPdf ? 10 : 11, weight: '600' },
+                color: '#1a3a5c',
               },
             },
+          }
+          : {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: 'rgba(26,58,92,0.08)' },
+              ticks: { callback: v => v + '%', font: { size: forPdf ? 11 : 10 } },
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                maxRotation: forPdf ? 35 : 40,
+                minRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 14,
+                font: { size: forPdf ? 10 : 9 },
+              },
+            },
+          },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1859,7 +1859,7 @@ function renderGdaCharts(ids, instances, getPhaseFilter, opts = {}) {
       try {
         c.resize();
         c.update('none');
-      } catch (_) {}
+      } catch (_) { }
     });
     if (forPdf) {
       Chart.defaults.devicePixelRatio = prevDpr;
@@ -1930,11 +1930,11 @@ function renderDashboard() {
 
   const ra = document.getElementById('recent-activity');
   if (ra && !window.GDA_IS_PARTNER) {
-  const items = dashboardData.recent_activity || [];
-  if (!items.length) {
-    ra.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">' + escapeHtml(tr('dash.recentNone')) + '</div>';
-  } else {
-    ra.innerHTML = items.map(a => `
+    const items = dashboardData.recent_activity || [];
+    if (!items.length) {
+      ra.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">' + escapeHtml(tr('dash.recentNone')) + '</div>';
+    } else {
+      ra.innerHTML = items.map(a => `
       <div style="display:flex;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--bg2)">
         <div style="background:var(--bg2);border-radius:6px;padding:6px 10px;font-family:Tahoma,Verdana,'Segoe UI',sans-serif;font-size:12px;color:var(--muted);white-space:nowrap">${a.time}</div>
         <div>
@@ -1943,7 +1943,7 @@ function renderDashboard() {
         </div>
         <div style="margin-left:auto;font-family:Tahoma,Verdana,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:var(--accent)">${a.progress}%</div>
       </div>`).join('');
-  }
+    }
   }
   renderDashboardCharts();
 }
@@ -2477,9 +2477,29 @@ function compressImageFile(file, maxEdge = 2560, quality = 0.88) {
   });
 }
 
-/** Envoie le fichier original — pas de compression navigateur (évite les échecs sur 6000×4000, etc.). */
-async function preparePhotoForUpload(file) {
-  return file;
+/**
+ * Compresse la photo côté navigateur avant envoi (cible < 1 Mo) pour garder l'app fluide
+ * même avec des photos brutes de téléphone (plusieurs Mo). En cas d'échec de compression
+ * (ancien souci sur certaines images très grandes), on retombe sur le fichier original —
+ * l'envoi ne doit jamais être bloqué par la compression.
+ */
+async function preparePhotoForUpload(file, maxBytes = 1024 * 1024) {
+  if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
+    return file;
+  }
+  if (file.size <= maxBytes) {
+    return file;
+  }
+  try {
+    let out = await compressImageFile(file, 2000, 0.82);
+    for (const [maxEdge, quality] of [[1800, 0.7], [1600, 0.55], [1400, 0.42]]) {
+      if (out.size <= maxBytes) break;
+      out = await compressImageFile(file, maxEdge, quality);
+    }
+    return out.size < file.size ? out : file;
+  } catch (e) {
+    return file;
+  }
 }
 
 function formatApiErrorMessage(j) {
@@ -2496,7 +2516,7 @@ function formatApiErrorMessage(j) {
       const key = String(raw);
       if (known[key]) return known[key];
       if (key.startsWith('validation.')) {
-        return 'Erreur serveur (« '+key+' »). Rechargez la page (Ctrl+F5).';
+        return 'Erreur serveur (« ' + key + ' »). Rechargez la page (Ctrl+F5).';
       }
       return key;
     }
@@ -2559,7 +2579,8 @@ async function addPhotos(tab, files) {
       continue;
     }
     try {
-      await uploadPhotoFile(tab, file);
+      const prepared = await preparePhotoForUpload(file);
+      await uploadPhotoFile(tab, prepared);
       ok++;
     } catch (e) {
       fail++;
