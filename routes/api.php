@@ -74,5 +74,6 @@ Route::middleware(['auth:sanctum', RestrictPartnerApi::class])->group(function (
 
     Route::middleware('admin.api')->group(function (): void {
         Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+        Route::post('/photos/optimize-existing', [PhotoController::class, 'optimizeExisting']);
     });
 });

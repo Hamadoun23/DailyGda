@@ -15,14 +15,17 @@ final class PhotoStorage
     }
 
     /**
-     * Enregistre le fichier tel quel.
+     * Enregistre le fichier puis l'optimise automatiquement sur disque (JPEG uniquement).
      */
     public static function storeUploaded(UploadedFile $file, string $category): string
     {
         $directory = 'photos/'.$category;
         Storage::disk('public')->makeDirectory($directory);
 
-        return (string) $file->store($directory, 'public');
+        $relative = (string) $file->store($directory, 'public');
+        ImageOptimizer::optimizeInPlace(Storage::disk('public')->path($relative));
+
+        return $relative;
     }
 
     /**
@@ -48,6 +51,7 @@ final class PhotoStorage
 
         $relative = $directory.'/'.Str::uuid()->toString().'.'.$ext;
         Storage::disk('public')->put($relative, $bytes);
+        ImageOptimizer::optimizeInPlace(Storage::disk('public')->path($relative));
 
         return $relative;
     }

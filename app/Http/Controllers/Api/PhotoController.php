@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Concerns\ResolvesProject;
 use App\Http\Controllers\Controller;
 use App\Models\Photo;
+use App\Support\ImageOptimizer;
 use App\Support\PhotoStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -155,6 +156,47 @@ class PhotoController extends Controller
             'category' => $photo->category,
             'taken_at' => $photo->taken_at?->toDateString(),
         ], 201);
+    }
+
+    /**
+     * Compresse rétroactivement les photos déjà stockées (admin, déclenché depuis le navigateur —
+     * utile en hébergement mutualisé sans accès shell). Traite par lots pour éviter les timeouts PHP.
+     */
+    public function optimizeExisting(Request $request)
+    {
+        $limit = max(1, min((int) $request->query('limit', 200), 500));
+        $minBytes = 400 * 1024;
+
+        $query = Photo::query()
+            ->whereNotNull('path')
+            ->where(function ($q) use ($minBytes) {
+                $q->where('file_size', '>', $minBytes)->orWhereNull('file_size');
+            })
+            ->orderBy('id');
+
+        $photos = $query->limit($limit)->get();
+
+        $optimized = 0;
+        $savedBytes = 0;
+        foreach ($photos as $photo) {
+            $absolute = Storage::disk('public')->path($photo->path);
+            $saved = ImageOptimizer::optimizeInPlace($absolute);
+            if ($saved > 0) {
+                $optimized++;
+                $savedBytes += $saved;
+                $photo->update(['file_size' => Storage::disk('public')->size($photo->path)]);
+            } else {
+                // Pas de gain possible (déjà compressée, PNG/WebP, etc.) : ne plus la re-scanner.
+                $photo->update(['file_size' => Storage::disk('public')->size($photo->path)]);
+            }
+        }
+
+        return response()->json([
+            'scanned' => $photos->count(),
+            'optimized' => $optimized,
+            'saved_kb' => round($savedBytes / 1024),
+            'has_more' => $photos->count() === $limit,
+        ]);
     }
 
     public function destroy(Request $request, Photo $photo)

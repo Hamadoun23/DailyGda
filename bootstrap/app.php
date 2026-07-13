@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
 
+        $middleware->api(append: [
+            \App\Http\Middleware\OpportunisticPhotoOptimizer::class,
+        ]);
+
         $middleware->redirectUsersTo(function () {
             $user = auth()->user();
             if (! $user) {
