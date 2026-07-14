@@ -63,6 +63,8 @@ const PHOTO_CATEGORIES = Object.keys(photoStore);
 let lbImages = [], lbIdx = 0;
 let currentPhotoTab = 'avant';
 let dailyFilter = 'all';
+let photoSelectMode = false;
+let photoSelection = new Set();
 
 const PHOTO_COLORS = {
   avant: 'var(--accent2)',
@@ -2322,6 +2324,8 @@ async function loadAllPhotoCategories() {
 
 function switchPhotoTab(tab) {
   currentPhotoTab = tab;
+  photoSelectMode = false;
+  photoSelection.clear();
   document.querySelectorAll('.photo-tab').forEach((el, i) => {
     const tabs = ['avant', 'pendant', 'apres', 'securite', 'qualite'];
     el.classList.toggle('active', tabs[i] === tab);
@@ -2347,8 +2351,16 @@ function renderPhotos() {
         </div>
         <div class="photo-hero-meta">
           <span class="photo-count-badge">${escapeHtml(countLabel)}</span>
+          ${photos.length > 0 && !isSiteReadOnly() ? `<button type="button" class="btn btn-secondary photo-select-toggle" onclick="togglePhotoSelectMode()">${photoSelectMode ? escapeHtml(tr('photo.selectCancel') || 'Annuler') : escapeHtml(tr('photo.selectStart') || 'Sélectionner')}</button>` : ''}
         </div>
       </header>
+
+      ${photoSelectMode ? `
+      <div class="photo-select-toolbar">
+        <span class="photo-select-count">${trTpl('photo.selectCount', { n: photoSelection.size }) || (photoSelection.size + ' sélectionnée(s)')}</span>
+        <button type="button" class="btn btn-secondary" onclick="togglePhotoSelectAll('${tab}')">${escapeHtml(tr('photo.selectAll') || 'Tout sélectionner')}</button>
+        <button type="button" class="btn btn-secondary" style="color:var(--danger);border-color:rgba(192,26,26,.35)" ${photoSelection.size === 0 ? 'disabled' : ''} onclick="bulkDeleteSelectedPhotos('${tab}')">${escapeHtml(tr('photo.selectDelete') || 'Supprimer la sélection')}</button>
+      </div>` : ''}
 
       <div class="photo-upload-card">
         <div class="drop-zone" id="dz-${tab}">
@@ -2393,8 +2405,16 @@ function photoThumb(p, i, tab, categoryLabel) {
   const onerr = apiFallback
     ? ` onerror="if(this.dataset.apiFallback && !this.dataset.triedApi){this.dataset.triedApi='1';this.src=this.dataset.apiFallback;}" data-api-fallback="${apiFallback}"`
     : '';
-  return `<article class="photo-item" onclick="openLB('${tab}',${i})">
+  const selected = p.id && photoSelection.has(p.id);
+  const clickHandler = photoSelectMode
+    ? `togglePhotoSelected('${tab}',${p.id ? p.id : 'null'})`
+    : `openLB('${tab}',${i})`;
+  const checkbox = photoSelectMode
+    ? `<div class="photo-select-check ${selected ? 'checked' : ''}">${selected ? '✓' : ''}</div>`
+    : '';
+  return `<article class="photo-item ${photoSelectMode ? 'photo-item--select' : ''} ${selected ? 'photo-item--selected' : ''}" onclick="${clickHandler}">
     <div class="photo-frame">
+      ${checkbox}
       <img src="${src}" alt="" loading="lazy"${onerr}>
     <div class="photo-date-badge">${escapeHtml(p.date)}</div>
       <div class="photo-overlay">
@@ -2610,6 +2630,53 @@ async function removePhoto(tab, i) {
     await apiFetch('/photos/' + p.id, { method: 'DELETE' });
     await loadPhotosCategory(tab);
     renderPhotos();
+  } catch (e) {
+    toast(e.message || 'Erreur', 'err');
+  }
+}
+
+function togglePhotoSelectMode() {
+  photoSelectMode = !photoSelectMode;
+  photoSelection.clear();
+  renderPhotos();
+}
+
+function togglePhotoSelected(tab, id) {
+  if (!id) return;
+  if (photoSelection.has(id)) {
+    photoSelection.delete(id);
+  } else {
+    photoSelection.add(id);
+  }
+  renderPhotos();
+}
+
+function togglePhotoSelectAll(tab) {
+  const ids = photoStore[tab].map(p => p.id).filter(Boolean);
+  const allSelected = ids.length > 0 && ids.every(id => photoSelection.has(id));
+  if (allSelected) {
+    photoSelection.clear();
+  } else {
+    ids.forEach(id => photoSelection.add(id));
+  }
+  renderPhotos();
+}
+
+async function bulkDeleteSelectedPhotos(tab) {
+  if (isSiteReadOnly()) return;
+  const ids = Array.from(photoSelection);
+  if (ids.length === 0) return;
+  if (!confirm(trTpl('photo.confirmDelN', { n: ids.length }) || `Supprimer ${ids.length} photo(s) ?`)) return;
+  try {
+    await apiFetch('/photos/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    photoSelection.clear();
+    photoSelectMode = false;
+    await loadPhotosCategory(tab);
+    renderPhotos();
+    toast(tr('photo.bulkDeleteOk') || 'Photos supprimées', 'ok');
   } catch (e) {
     toast(e.message || 'Erreur', 'err');
   }

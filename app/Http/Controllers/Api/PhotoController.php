@@ -212,6 +212,30 @@ class PhotoController extends Controller
         return response()->json(['message' => 'Photo supprimée']);
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $project = $this->resolveProject($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $photos = Photo::query()
+            ->where('project_id', $project->id)
+            ->whereIn('id', $data['ids'])
+            ->get();
+
+        foreach ($photos as $photo) {
+            if ($photo->path && Storage::disk('public')->exists($photo->path)) {
+                Storage::disk('public')->delete($photo->path);
+            }
+            $photo->delete();
+        }
+
+        return response()->json(['deleted' => $photos->count()]);
+    }
+
     private function resolveExtension(UploadedFile $file): string
     {
         $ext = strtolower($file->getClientOriginalExtension() ?: '');

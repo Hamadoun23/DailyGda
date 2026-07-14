@@ -975,6 +975,56 @@ input[type=range]::-webkit-slider-thumb {
   letter-spacing: .5px;
 }
 
+.photo-select-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+}
+
+.photo-select-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.photo-select-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.9);
+  border: 2px solid var(--border2);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 2;
+}
+
+.photo-select-check.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.photo-item--select .photo-frame {
+  outline: 2px solid transparent;
+  transition: outline-color .15s;
+}
+
+.photo-item--selected .photo-frame {
+  outline: 2px solid var(--accent);
+}
+
 .photo-upload-card {
   margin-bottom: 18px;
 }
